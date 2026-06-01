@@ -6,13 +6,13 @@
 
 The system analyzes your repository structure, extracts relevant project information, and produces high-quality documentation in seconds. It supports local repositories, GitHub integration (import or clone), and works with both local LLMs (via Ollama) and remote LLM services (Gemini, OpenAI).
 
-## Demo
+## 🎥 Demo
 
 **Zenodo:** https://zenodo.org/records/20386248
 
 **YouTube:** https://youtu.be/n51u9eG8PfY?si=0QOSlOHyjOE_q7iq
 
-## Artifact Overview
+## 📋 Artifact Overview
 
 D.aise provides an end-to-end workflow for automated README generation:
 
@@ -23,7 +23,7 @@ D.aise provides an end-to-end workflow for automated README generation:
 
 The backend is built with Python (Flask) and exposes a REST API. The frontend is a modern Next.js + TypeScript web application.
 
-## Documentation Structure
+## 📚 Documentation Structure
 
 ```
 D.aise/
@@ -38,7 +38,7 @@ D.aise/
 - **[Backend README](https://github.com/aisepucrio/D.aise/blob/main/backend/README.md)**: Flask API architecture, routes, and service layer
 - **[Experiments](https://github.com/aisepucrio/D.aise/tree/main/experiments/experiments)**: Evaluation data from the research study
 
-## Key Features
+## ✨ Key Features
 
 - **Automatic README generation** from repository structure using LLMs
 - **Multiple repository sources**: local folder selection, GitHub API import, or Git clone
@@ -53,7 +53,7 @@ D.aise/
 - **Configurable model catalog**: `config/models.json` lists available models per provider
 - **Mockup mode**: run without a real LLM for development and testing (`USE_LLM=false`)
 
-## Repository Organization
+## 🏗️ Repository Organization
 
 ```
 D.aise/
@@ -93,7 +93,7 @@ D.aise/
         └── [D.aise] Usability Results.xlsx
 ```
 
-## System Requirements
+## 🔧 System Requirements
 
 ### Required
 
@@ -110,7 +110,7 @@ D.aise/
 | Ollama   | [Ollama](https://ollama.com) installed and running locally |
 | None     | Set `USE_LLM=false` to use mockup output (development only) |
 
-## Installation and Configuration
+## 🚀 Installation and Configuration
 
 ### Step 1: Clone the Repository
 
@@ -220,7 +220,7 @@ npm run dev
 
 Open your browser at `http://localhost:3000`.
 
-## Usage
+## 🖥️ Usage
 
 ### Home Page — Load a Repository
 
@@ -257,7 +257,7 @@ Navigate to `/config-model` to:
 - Select a specific model from the catalog
 - Save API keys and endpoints 
 
-## Backend API Endpoints
+## 📡 Backend API Endpoints
 
 The Flask server runs on `http://localhost:8765`.
 
@@ -283,7 +283,7 @@ The Flask server runs on `http://localhost:8765`.
 | `GET` | `/api/llm-config` | Get saved LLM configuration |
 | `POST` | `/api/llm-config` | Save LLM configuration |
 
-## Experiments
+## 📊 Experiments
 
 The `experiments/experiments/` directory contains the research evaluation data from the D.aise study:
 
@@ -291,6 +291,6 @@ The `experiments/experiments/` directory contains the research evaluation data f
 - **Transcriptions**: Participant interview transcriptions
 - **Usability Results**: System Usability Scale (SUS) and qualitative feedback
 
-## License
+## ⚖️ License
 
 MIT — see [LICENSE](LICENSE) for details.
