@@ -45,7 +45,14 @@ To install AISE Docs, follow these steps:
 2. Navigate to the project directory and create a new Python virtual environment using `python -m venv .venv`.
 3. Activate the virtual environment using `.venv/Scripts/activate` on Windows or `source .venv/bin/activate` on Linux.
 4. Install the required dependencies using `pip install -r requirements.txt`.
-5. Start the Flask server by running `python main.py`.
+5. Start the Flask server by running `python server.py` (API on port `8765`).
+
+### Configuration files
+
+| Path | In Git? | Purpose |
+|------|---------|---------|
+| `config/models.json` | Yes | LLM model catalog shown in the UI |
+| `data/config/llm_config.json` | No (`data/` is gitignored) | API keys and saved LLM preferences (created on first save) |
 
 ## Usage Instructions
 

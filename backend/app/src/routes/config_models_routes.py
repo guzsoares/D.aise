@@ -4,8 +4,14 @@ from flask import Blueprint, render_template, request, jsonify
 
 config_models_bp = Blueprint("config_models", __name__)
 
-LLM_CONFIG_PATH = os.path.join("data", "config", "llm_config.json")
-MODELS_PATH = os.path.join("data", "config", "models.json")
+# Raiz do backend (…/backend), independente do cwd ao rodar server.py
+_BACKEND_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..")
+)
+# Versionado no Git: catálogo estático de modelos por provedor
+MODELS_PATH = os.path.join(_BACKEND_DIR, "config", "models.json")
+# Gerado localmente (gitignored): credenciais e preferências do usuário
+LLM_CONFIG_PATH = os.path.join(_BACKEND_DIR, "data", "config", "llm_config.json")
 
 # Estrutura padrão quando o arquivo ainda não existe
 def _default_config():
@@ -58,12 +64,55 @@ def _write_config(data: dict):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def _default_models() -> dict:
+    """Catálogo padrão quando config/models.json não puder ser lido."""
+    return {
+        "gemini": [
+            {"value": "gemini-3.1-pro", "label": "Gemini 3.1 Pro"},
+            {"value": "gemini-3.1-flash-lite", "label": "Gemini 3.1 Flash Lite"},
+            {"value": "gemini-3-flash", "label": "Gemini 3 Flash"},
+            {"value": "gemini-2.5-pro", "label": "Gemini 2.5 Pro"},
+            {"value": "gemini-2.5-flash", "label": "Gemini 2.5 Flash"},
+            {"value": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite"},
+        ],
+        "openai": [
+            {"value": "gpt-5.4", "label": "GPT-5.4"},
+            {"value": "gpt-5.4-mini", "label": "GPT-5.4 Mini"},
+            {"value": "gpt-5.4-nano", "label": "GPT-5.4 Nano"},
+            {"value": "o3", "label": "o3"},
+            {"value": "o4-mini", "label": "o4 Mini"},
+        ],
+        "ollama": [
+            {"value": "gemma4:31b", "label": "Gemma 4 (31B)"},
+            {"value": "nemotron-cascade:30b", "label": "Nemotron Cascade 2 (30B)"},
+            {"value": "nemotron-3-nano:30b", "label": "Nemotron 3 Nano (30B)"},
+            {"value": "mistral-small3.1", "label": "Mistral Small 3.1"},
+            {"value": "llava:7b", "label": "LLaVa (7B)"},
+            {"value": "deepseek-coder-v2:16b", "label": "DeepSeek Coder V2 (16B)"},
+            {"value": "qwen2.5-coder:32b", "label": "Qwen 2.5 Coder (32B)"},
+            {"value": "qwen3-coder:30b", "label": "Qwen 3 Coder (30B)"},
+            {"value": "mistral-nemo:12b", "label": "Mistral Nemo (12B)"},
+            {"value": "llama3.2:3b", "label": "Llama 3.2 (3B)"},
+            {"value": "llama3.1:8b", "label": "Llama 3.1 (8B)"},
+            {"value": "gemma2:2b", "label": "Gemma 2 (2B)"},
+            {"value": "codellama:7b", "label": "Code Llama (7B)"},
+            {"value": "deepseek-r1:14b", "label": "DeepSeek R1 (14B)"},
+            {"value": "starcoder2:15b", "label": "StarCoder2 (15B)"},
+            {"value": "codegemma:7b", "label": "CodeGemma (7B)"},
+            {"value": "codellama:13b", "label": "Code Llama (13B)"},
+            {"value": "qwen2.5-coder:14b", "label": "Qwen 2.5 Coder (14B)"},
+            {"value": "qwen2.5-coder:7b", "label": "Qwen 2.5 Coder (7B)"},
+            {"value": "mistral", "label": "Mistral"},
+        ],
+    }
+
+
 @config_models_bp.route("/api/models", methods=["GET"])
 def get_models():
     """Retorna a lista de modelos disponíveis por provedor."""
     try:
         if not os.path.exists(MODELS_PATH):
-            return jsonify({"error": "Arquivo models.json não encontrado."}), 404
+            return jsonify(_default_models()), 200
         with open(MODELS_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
         return jsonify(data), 200

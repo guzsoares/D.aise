@@ -2,7 +2,8 @@
  * Configuração LLM
  *
  * Persistência: servidor via GET/POST /models/api/llm-config
- * (gravado em data/config/llm_config.json)
+ * (gravado em data/config/llm_config.json, gitignored)
+ * Catálogo de modelos: GET /models/api/models (config/models.json, versionado)
  *
  * Dois níveis de estado:
  *   - Credenciais (apiKey/endpoint): por provedor, persistidas ao clicar "+".
@@ -203,12 +204,12 @@
 
   function getModelPlaceholder(provider) {
     if (provider === "openai") {
-      return "Ex: gpt-4o, gpt-4-turbo, gpt-3.5";
+      return "Ex: gpt-5.4, gpt-5.4-mini, o3, o4-mini";
     }
     if (provider === "ollama") {
       return "Ex: llama3:8b, mistral:7b, gemma3:4b";
     }
-    return "Ex: gemini-1.5-pro, gemini-1.5-flash, gemini-2.5-flash";
+    return "Ex: gemini-3.1-pro, gemini-2.5-flash, gemini-2.5-flash-lite";
   }
 
   function updateApiPlaceholder(provider) {
