@@ -114,19 +114,18 @@ class ProjectControl:
         project = Project()
 
         folder_name = data.get("folder_name") or data.get("name") or "project"
-        file_path = os.path.join("data", "repositories", f"{folder_name}.json")
 
-        # Verifica se vai criar ou atualizar
-        is_update = os.path.exists(file_path)
+        # Verifica se vai criar ou atualizar (agora consultando o banco)
+        existing_project = Project().find_project_by_folder_name(folder_name)
+        is_update = existing_project is not None
 
         # Preserva campos críticos que o formulário não envia (source, github_repo, tree, etc.)
         if is_update:
-            import json as _json
-            with open(file_path, "r", encoding="utf-8") as _f:
-                existing = _json.load(_f)
             for field in ("source", "github_repo", "tree", "commits", "diff", "readme", "changelog"):
-                if field not in data and field in existing:
-                    data[field] = existing[field]
+                if field not in data:
+                    value = getattr(existing_project, field, None)
+                    if value is not None:
+                        data[field] = value
 
         saved_data = project.save_json(data)
 
@@ -139,7 +138,7 @@ class ProjectControl:
 
         return {
             "message": message,
-            "saved_path": file_path,
+            "saved_path": f"db://projects/{folder_name}",
             "project": saved_data
         }, status
 
@@ -216,25 +215,10 @@ class ProjectControl:
         # =========================
         if project_model.source == "github":
             try:
-                import json as _json
                 from app.src.service.github_service import GithubService
+                from app.src.service.llm_config_service import resolve_secret
 
-                _config_path = os.path.join(
-                    "data",
-                    "config",
-                    "llm_config.json"
-                )
-
-                _cfg = {}
-
-                if os.path.exists(_config_path):
-                    with open(_config_path, "r", encoding="utf-8") as _f:
-                        _cfg = _json.load(_f)
-
-                github_token = _cfg.get("github", {}).get(
-                    "committedToken",
-                    ""
-                )
+                github_token = resolve_secret("github")
 
                 svc = GithubService(token=github_token)
 
@@ -313,13 +297,8 @@ class ProjectControl:
             # Para projetos GitHub: busca árvore atualizada da API a cada chamada
             if project.source == "github":
                 from app.src.service.github_service import GithubService
-                github_token = (llm_config or {}).get("github_token", "")
-                if not github_token:
-                    _config_path = os.path.join("data", "config", "llm_config.json")
-                    if os.path.exists(_config_path):
-                        with open(_config_path, "r", encoding="utf-8") as _f:
-                            _cfg = json.load(_f)
-                        github_token = _cfg.get("github", {}).get("committedToken", "")
+                from app.src.service.llm_config_service import resolve_secret
+                github_token = (llm_config or {}).get("github_token", "") or resolve_secret("github")
                 svc = GithubService(token=github_token)
                 owner, repo_name = project.github_repo.split("/", 1)
                 info = svc.get_repo_info(owner, repo_name)
@@ -461,14 +440,8 @@ class ProjectControl:
 
         token = (token or "").strip()
         if not token:
-            _config_path = os.path.join("data", "config", "llm_config.json")
-            if os.path.exists(_config_path):
-                try:
-                    with open(_config_path, "r", encoding="utf-8") as _f:
-                        _cfg = json.load(_f)
-                    token = (_cfg.get("github") or {}).get("committedToken", "") or ""
-                except Exception:
-                    pass
+            from app.src.service.llm_config_service import resolve_secret
+            token = resolve_secret("github")
 
         svc = GithubService(token=token)
 

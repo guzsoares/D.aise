@@ -101,6 +101,7 @@ D.aise/
 - **Node.js** ≥ 18
 - **npm** ≥ 9
 - **Git** ≥ 2.0
+- **PostgreSQL** ≥ 14 (or use Docker, which provisions it for you)
 
 > **Prefer containers?** You can skip all of the above and run everything with Docker — see [Running with Docker](#-running-with-docker).
 
@@ -141,7 +142,7 @@ pip install -r requirements.txt
 
 #### Backend environment variables
 
-Create a `.env` file inside the `backend/` directory:
+Create a `.env` file inside the `backend/` directory (see `backend/.env.example`):
 
 ```env
 # Enable real LLM calls (set to false to use mockup output)
@@ -149,16 +150,32 @@ USE_LLM=true
 
 # Debug mode
 DEBUG=false
+
+# PostgreSQL connection (short postgresql:// form is auto-upgraded to psycopg3)
+DATABASE_URL=postgresql://daise:daise@localhost:5432/daise
+
+# Master key to encrypt credentials saved in "cloud" mode.
+# Generate one with: python -m app.src.security.crypto
+DAISE_SECRET_KEY=
 ```
 
-> **Note:** API keys and LLM preferences are stored at runtime in `backend/data/config/llm_config.json` (gitignored). You do not need to put your API key in `.env` — configure it through the web interface instead.
+Then create the schema and seed the prompts:
+
+```bash
+alembic upgrade head
+python -m scripts.migrate_json_to_pg
+```
+
+> **Note:** API keys and LLM preferences are configured through the web interface, not `.env`. Credentials are stored **encrypted in PostgreSQL** ("cloud" mode) or **locally on the host** (`backend/data/config/llm_config_local.json`, gitignored) — you choose per credential in the UI.
 
 #### Configuration files
 
 | Path | In Git? | Purpose |
 |------|---------|---------|
 | `backend/config/models.json` | Yes | LLM model catalog shown in the UI |
-| `backend/data/config/llm_config.json` | No | Saved API keys and LLM preferences (created on first save) |
+| `backend/.env` | No | `USE_LLM`, `DEBUG`, `DATABASE_URL`, `DAISE_SECRET_KEY` |
+| PostgreSQL (`projects`, `prompts`, `default_prompts`, `llm_config`) | — | Projects, prompt library, and encrypted LLM config |
+| `backend/data/config/llm_config_local.json` | No | Credentials saved in **local** mode only |
 
 ### Step 3: Set Up the Frontend
 
@@ -236,18 +253,24 @@ No local Python, Node, or Git installation is needed on the host — everything 
 
 ### Quick start
 
-From the repository root:
+From the repository root, first export a master key (used to encrypt credentials
+saved in "cloud" mode), then bring the stack up:
 
 ```bash
+export DAISE_SECRET_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 docker compose up --build
 ```
 
-This builds both images and starts the services:
+This builds the images and starts the services (the backend applies migrations
+and seeds prompts automatically on boot):
 
 | Service | URL | Container port → Host port |
 |---------|-----|----------------------------|
 | Frontend (Next.js) | http://localhost:3000 | 3000 → 3000 |
 | Backend (Flask API) | http://localhost:8765 | 8765 → 8765 |
+| PostgreSQL | (internal) | 5432 |
+
+> **Master key:** without `DAISE_SECRET_KEY`, credentials can still be saved in **local** mode; "cloud" (encrypted) mode requires the key. Keep the same key across restarts, or previously encrypted credentials become unreadable.
 
 Open your browser at `http://localhost:3000`.
 
@@ -265,10 +288,11 @@ The following host directories are mounted into the backend container so data su
 
 | Host path | Container path | Contents |
 |-----------|----------------|----------|
-| `backend/data/` | `/app/data` | Saved API keys, GitHub token, and LLM preferences |
+| `backend/pgdata/` | `/var/lib/postgresql/data` | PostgreSQL data (projects, prompts, encrypted config) |
+| `backend/data/` | `/app/data` | Credentials saved in **local** mode + cloned repo metadata |
 | `backend/repositories/` | `/app/repositories` | Cloned/imported repositories |
 
-> **Security note:** `backend/data/config/llm_config.json` stores credentials (including the GitHub token) in plain text. Keep this directory private and never commit it.
+> **Security note:** credentials saved in **cloud** mode are encrypted with `DAISE_SECRET_KEY` before being stored in PostgreSQL. Credentials saved in **local** mode live in `backend/data/config/llm_config_local.json` in plain text — keep that directory private and never commit it.
 
 ### Notes and limitations
 

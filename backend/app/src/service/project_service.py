@@ -11,6 +11,16 @@ import re
 from datetime import datetime
 import platform
 
+
+def _resolve_github_token(llm_config: dict | None) -> str:
+    """Token do GitHub: usa o do payload; senão resolve do servidor (cloud/local)."""
+    token = (llm_config or {}).get("github_token", "")
+    if token:
+        return token
+    from app.src.service.llm_config_service import resolve_secret
+    return resolve_secret("github")
+
+
 class ProjectService:
     def __init__(self):
         self.projects = {}  # cache opcional
@@ -188,13 +198,7 @@ class ProjectService:
                 if project.source == "github":
                     # Para projetos GitHub: busca árvore atualizada da API
                     from app.src.service.github_service import GithubService
-                    github_token = llm_config.get("github_token", "")
-                    if not github_token:
-                        _config_path = os.path.join("data", "config", "llm_config.json")
-                        if os.path.exists(_config_path):
-                            with open(_config_path, "r", encoding="utf-8") as _f:
-                                _cfg = json.load(_f)
-                            github_token = _cfg.get("github", {}).get("committedToken", "")
+                    github_token = _resolve_github_token(llm_config)
                     svc = GithubService(token=github_token)
                     owner, repo_name = project.github_repo.split("/", 1)
                     info = svc.get_repo_info(owner, repo_name)
@@ -212,13 +216,7 @@ class ProjectService:
                 try:
                     if project.source == "github":
                         from app.src.service.github_service import GithubService
-                        github_token = llm_config.get("github_token", "")
-                        if not github_token:
-                            _config_path = os.path.join("data", "config", "llm_config.json")
-                            if os.path.exists(_config_path):
-                                with open(_config_path, "r", encoding="utf-8") as _f:
-                                    _cfg = json.load(_f)
-                                github_token = _cfg.get("github", {}).get("committedToken", "")
+                        github_token = _resolve_github_token(llm_config)
                         owner, repo_name = project.github_repo.split("/", 1)
                         svc = GithubService(token=github_token)
                         if has_title_desc and not has_diffs:
@@ -548,7 +546,7 @@ class ProjectService:
             # Fluxo GitHub API
             # ============================
             from app.src.service.github_service import GithubService
-            github_token = llm_config.get("github_token", "")
+            github_token = _resolve_github_token(llm_config)
             owner, repo_name = project.github_repo.split("/", 1)
             svc = GithubService(token=github_token)
 
@@ -645,7 +643,7 @@ class ProjectService:
         # ============================
         if project.source == "github":
             owner, repo_name = project.github_repo.split("/", 1)
-            github_token = llm_config.get("github_token", "")
+            github_token = _resolve_github_token(llm_config)
             svc = GithubService(token=github_token)
             old_readme = svc.get_readme_content(owner, repo_name)
         else:
@@ -724,16 +722,7 @@ class ProjectService:
             if "/" not in github_repo:
                 return {"error": "github_repo inválido no projeto."}, 400
             owner, repo_name = github_repo.split("/", 1)
-            github_token = llm_config.get("github_token", "")
-            if not github_token:
-                _config_path = os.path.join("data", "config", "llm_config.json")
-                if os.path.exists(_config_path):
-                    try:
-                        with open(_config_path, "r", encoding="utf-8") as _f:
-                            _cfg = json.load(_f)
-                        github_token = (_cfg.get("github") or {}).get("committedToken", "") or ""
-                    except Exception:
-                        pass
+            github_token = _resolve_github_token(llm_config)
 
             from app.src.service.github_service import GithubService
             svc = GithubService(token=github_token)

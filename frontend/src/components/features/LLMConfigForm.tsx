@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
+  Cloud,
   Eye,
   EyeOff,
+  HardDrive,
   Loader2,
   Plus,
   Save,
@@ -36,10 +38,13 @@ function FieldLabel({
   );
 }
 
+type StorageMode = "cloud" | "local";
+
 export default function LLMConfigForm() {
   const [provider, setProvider] = useState("gemini");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [storageMode, setStorageMode] = useState<StorageMode>("cloud");
   const [showPassword, setShowPassword] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
   const [tokens, setTokens] = useState(4096);
@@ -55,6 +60,12 @@ export default function LLMConfigForm() {
   // para auto-salvar só em mudanças intencionais.
   const providerChangedByUser = useRef(false);
 
+  function storageModeOf(cfg: ApiLlmConfig | null, prov: string): StorageMode {
+    if (prov === "gemini") return cfg?.gemini?.storageMode ?? "cloud";
+    if (prov === "openai") return cfg?.openai?.storageMode ?? "cloud";
+    return "cloud";
+  }
+
   // Load config + models on mount
   useEffect(() => {
     Promise.all([getLlmConfig(), getModels()])
@@ -66,13 +77,14 @@ export default function LLMConfigForm() {
         setModel(config.__lastSavedConfig?.model ?? "");
         setTemperature(Number(config.__lastSavedConfig?.temperature ?? 0.7));
         setTokens(Number(config.__lastSavedConfig?.tokens ?? 4096));
+        setStorageMode(storageModeOf(config, savedProvider));
 
+        // Segredos (gemini/openai) nunca voltam da API — o campo começa vazio e
+        // só é enviado se o usuário digitar um novo. Ollama endpoint não é segredo.
         if (savedProvider === "ollama") {
           setApiKey(config.ollama?.endpoint ?? "");
-        } else if (savedProvider === "gemini") {
-          setApiKey(config.gemini?.committedApiKey ?? "");
-        } else if (savedProvider === "openai") {
-          setApiKey(config.openai?.committedApiKey ?? "");
+        } else {
+          setApiKey("");
         }
 
         const opts: SelectOption[] = (
@@ -102,22 +114,20 @@ export default function LLMConfigForm() {
         const newModel = exists ? model : (opts[0]?.value ?? "");
         setModel(newModel);
 
-        // Reset credential field
-        let newCredential = "";
-        if (provider === "ollama") {
-          newCredential = savedConfig.ollama?.committedEndpoint ?? "";
-        } else if (provider === "gemini") {
-          newCredential = savedConfig.gemini?.committedApiKey ?? "";
-        } else if (provider === "openai") {
-          newCredential = savedConfig.openai?.committedApiKey ?? "";
-        }
+        // Campo de credencial: só o endpoint do Ollama é conhecido; segredos vazios.
+        const newCredential =
+          provider === "ollama"
+            ? (savedConfig.ollama?.committedEndpoint ?? "")
+            : "";
         setApiKey(newCredential);
 
-        // Auto-save apenas quando a troca foi feita pelo usuário (não no load),
-        // já com os valores resolvidos do novo provider.
+        const newMode = storageModeOf(savedConfig, provider);
+        setStorageMode(newMode);
+
+        // Auto-save apenas quando a troca foi feita pelo usuário (não no load).
         if (providerChangedByUser.current) {
           providerChangedByUser.current = false;
-          persist({ provider, model: newModel, apiKey: newCredential });
+          persist({ provider, model: newModel, apiKey: newCredential, storageMode: newMode });
         }
       })
       .catch(() => {});
@@ -133,19 +143,27 @@ export default function LLMConfigForm() {
       apiKey: string;
       temperature: number;
       tokens: number;
+      storageMode: StorageMode;
     }>,
   ) {
-    const cfg = { provider, model, apiKey, temperature, tokens, ...overrides };
+    const cfg = { provider, model, apiKey, temperature, tokens, storageMode, ...overrides };
 
     setIsSaving(true);
     setSaveSuccess(false);
     setError(null);
 
+    // Só envia o segredo se o usuário digitou um novo (campo não vazio). Assim a
+    // máscara nunca sobrescreve a credencial salva; o storageMode sempre vai
+    // junto, permitindo migrar cloud <-> local sem reenviar o segredo.
+    const secret = (cfg.apiKey ?? "").trim();
     const providerKey: Record<string, object> = {};
-    if (cfg.provider === "gemini") {
-      providerKey.gemini = { apiKey: cfg.apiKey, committedApiKey: cfg.apiKey };
-    } else if (cfg.provider === "openai") {
-      providerKey.openai = { apiKey: cfg.apiKey, committedApiKey: cfg.apiKey };
+    if (cfg.provider === "gemini" || cfg.provider === "openai") {
+      const obj: Record<string, unknown> = { storageMode: cfg.storageMode };
+      if (secret) {
+        obj.apiKey = secret;
+        obj.committedApiKey = secret;
+      }
+      providerKey[cfg.provider] = obj;
     } else if (cfg.provider === "ollama") {
       providerKey.ollama = { endpoint: cfg.apiKey, committedEndpoint: cfg.apiKey };
     }
@@ -163,6 +181,7 @@ export default function LLMConfigForm() {
     try {
       const res = await saveLlmConfig(payload);
       setSavedConfig(res.config);
+      setApiKey(cfg.provider === "ollama" ? cfg.apiKey : "");
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (e) {
@@ -191,11 +210,22 @@ export default function LLMConfigForm() {
     setProvider(value);
   }
 
+  function handleStorageModeChange(mode: StorageMode) {
+    if (mode === storageMode) return;
+    setStorageMode(mode);
+    persist({ storageMode: mode });
+  }
+
   const isOllama = provider === "ollama";
+  const secretInfo = provider === "openai" ? savedConfig?.openai : savedConfig?.gemini;
+  const hasSavedKey = !isOllama && !!secretInfo?.hasKey;
+  const maskedKey = secretInfo?.maskedKey ?? "";
   const credentialLabel = isOllama ? "Ollama endpoint" : "API key";
   const credentialPlaceholder = isOllama
     ? "http://localhost:11434"
-    : "Add API key…";
+    : hasSavedKey
+      ? `${maskedKey} — digite para trocar`
+      : "Add API key…";
 
   if (isLoading) {
     return (
@@ -240,7 +270,7 @@ export default function LLMConfigForm() {
               autoComplete="off"
             />
             <div className="flex shrink-0 items-center gap-1 border-l border-stroke pr-2 pl-1">
-              {apiKey ? (
+              {apiKey || hasSavedKey ? (
                 <CheckCircle2
                   className="size-5 text-brand"
                   strokeWidth={1.75}
@@ -263,6 +293,42 @@ export default function LLMConfigForm() {
               </button>
             </div>
           </div>
+
+          {!isOllama ? (
+            <div className="mt-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleStorageModeChange("cloud")}
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+                    storageMode === "cloud"
+                      ? "border-brand/50 bg-brand/10 text-brand"
+                      : "border-stroke bg-surface-input text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <Cloud className="size-3.5" strokeWidth={1.75} aria-hidden />
+                  Nuvem (criptografado)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleStorageModeChange("local")}
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+                    storageMode === "local"
+                      ? "border-brand/50 bg-brand/10 text-brand"
+                      : "border-stroke bg-surface-input text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <HardDrive className="size-3.5" strokeWidth={1.75} aria-hidden />
+                  Local (apenas no servidor)
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-muted">
+                {storageMode === "cloud"
+                  ? "A credencial é cifrada e guardada no banco."
+                  : "A credencial fica só no host, fora do banco."}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         {modelOptions.length > 0 ? (

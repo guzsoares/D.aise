@@ -60,6 +60,16 @@ class Agent:
                 or ""
             ).strip()
 
+        # A API mascara as credenciais, então o payload do frontend não traz mais
+        # o segredo real: resolvemos no servidor (decifra cloud / lê local).
+        from app.src.service.llm_config_service import resolve_secret
+
+        if provider in ("gemini", "openai") and (not api_key or api_key.startswith("••••")):
+            api_key = resolve_secret(provider) or api_key
+
+        if provider == "ollama" and not ollama_url:
+            ollama_url = resolve_secret("ollama") or ollama_url
+
         return provider, model_name, api_key, ollama_url
 
 

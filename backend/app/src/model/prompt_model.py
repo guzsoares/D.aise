@@ -24,8 +24,16 @@ class Prompt:
             return json.load(f)
 
     def load_all(self):
-        prompts = self._load_json(self.prompts_path)
-        defaults = self._load_json(self.defaults_path)
+        from app.src.db import session_scope
+        from app.src.db_models import PromptRow, DefaultPromptRow
+
+        with session_scope() as s:
+            prompts = {r.id: r.to_dict() for r in s.query(PromptRow).all()}
+            defaults = {
+                r.type: r.prompt_id
+                for r in s.query(DefaultPromptRow).all()
+                if r.prompt_id
+            }
 
         return {
             "prompts": prompts,
@@ -37,14 +45,13 @@ class Prompt:
         Carrega um prompt pelo ID, aplica placeholders
         e retorna a própria instância da model.
         """
-        prompts = self._load_json(self.prompts_path)
+        from app.src.db import session_scope
+        from app.src.db_models import PromptRow
 
-        prompt_data = prompts.get(prompt_id)
-        if not prompt_data:
-            return None
+        with session_scope() as s:
+            row = s.get(PromptRow, prompt_id)
+            template: str = row.content if row else ""
 
-        # 1. Extrai somente a STRING do prompt
-        template: str = prompt_data.get("content", "")
         if not template:
             return None
 
@@ -66,91 +73,64 @@ class Prompt:
                 "error": "Invalid payload"
             }
 
-        prompts = self._load_json(self.prompts_path)
+        from app.src.db import session_scope
+        from app.src.db_models import PromptRow
 
-        now = datetime.utcnow().isoformat() + "Z"
         prompt_id = data.get("id")
 
-        # ===== CREATE =====
-        if not prompt_id:
-            prompt_id = uuid.uuid4().hex
+        with session_scope() as s:
+            # ===== CREATE =====
+            if not prompt_id:
+                prompt_id = uuid.uuid4().hex
+                row = PromptRow(
+                    id=prompt_id,
+                    name=data.get("name") or "",
+                    type=data.get("type") or "",
+                    description=data.get("description", ""),
+                    content=data.get("content") or "",
+                    is_active=data.get("is_active", True),
+                )
+                s.add(row)
+                s.flush()
+                return {"success": True, "data": row.to_dict()}
 
-            new_prompt = {
-                "id": prompt_id,
-                "name": data.get("name"),
-                "type": data.get("type"),
-                "description": data.get("description", ""),
-                "content": data.get("content"),
-                "is_active": data.get("is_active", True),
-                "created_at": now,
-                "updated_at": now
-            }
+            # ===== UPDATE =====
+            row = s.get(PromptRow, prompt_id)
+            if row is None:
+                return {"success": False, "error": "Prompt not found"}
 
-            prompts[prompt_id] = new_prompt
-
-            with open(self.prompts_path, "w", encoding="utf-8") as f:
-                json.dump(prompts, f, indent=2, ensure_ascii=False)
-
-            return {
-                "success": True,
-                "data": new_prompt
-            }
-
-        # ===== UPDATE =====
-        if prompt_id not in prompts:
-            return {
-                "success": False,
-                "error": "Prompt not found"
-            }
-
-        existing = prompts[prompt_id]
-
-        existing.update({
-            "name": data.get("name", existing["name"]),
-            "type": data.get("type", existing["type"]),
-            "description": data.get("description", existing.get("description", "")),
-            "content": data.get("content", existing["content"]),
-            "is_active": data.get("is_active", existing["is_active"]),
-            "updated_at": now
-        })
-
-        prompts[prompt_id] = existing
-
-        with open(self.prompts_path, "w", encoding="utf-8") as f:
-            json.dump(prompts, f, indent=2, ensure_ascii=False)
-
-        return {
-            "success": True,
-            "data": existing
-        }
+            row.name = data.get("name", row.name)
+            row.type = data.get("type", row.type)
+            row.description = data.get("description", row.description)
+            row.content = data.get("content", row.content)
+            row.is_active = data.get("is_active", row.is_active)
+            s.flush()
+            return {"success": True, "data": row.to_dict()}
 
 
     def set_default_prompt(self, prompt_id, prompt_type):
-        # carrega prompts e defaults
-        prompts_data = self._load_json(self.prompts_path)
-        defaults = self._load_json(self.defaults_path)
+        from app.src.db import session_scope
+        from app.src.db_models import PromptRow, DefaultPromptRow
 
-        # valida prompt
-        prompt = prompts_data.get(prompt_id)
-        if not prompt:
-            return {
-                "success": False,
-                "error": "Prompt not found"
-            }
+        with session_scope() as s:
+            prompt = s.get(PromptRow, prompt_id)
+            if not prompt:
+                return {
+                    "success": False,
+                    "error": "Prompt not found"
+                }
 
-        if not prompt.get("is_active", True):
-            return {
-                "success": False,
-                "error": "Cannot set an inactive prompt as default"
-            }
+            if not prompt.is_active:
+                return {
+                    "success": False,
+                    "error": "Cannot set an inactive prompt as default"
+                }
 
-        # seta default por tipo
-        defaults[prompt_type] = prompt_id
-
-        # escreve no arquivo
-        os.makedirs(os.path.dirname(self.defaults_path), exist_ok=True)
-        with open(self.defaults_path, "w", encoding="utf-8") as f:
-            json.dump(defaults, f, indent=2, ensure_ascii=False)
+            row = s.get(DefaultPromptRow, prompt_type)
+            if row is None:
+                s.add(DefaultPromptRow(type=prompt_type, prompt_id=prompt_id))
+            else:
+                row.prompt_id = prompt_id
 
         return {
             "success": True,
@@ -161,21 +141,15 @@ class Prompt:
         }
 
     def delete(self, prompt_id: str) -> bool:
-        if not os.path.exists(self.prompts_path):
-            return False
+        from app.src.db import session_scope
+        from app.src.db_models import PromptRow
 
-        with open(self.prompts_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        if prompt_id not in data:
-            return False
-
-        del data[prompt_id]
-
-        with open(self.prompts_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-
-        return True
+        with session_scope() as s:
+            row = s.get(PromptRow, prompt_id)
+            if row is None:
+                return False
+            s.delete(row)
+            return True
     
     def fill_placeholders(self, template: str, project) -> str:
         """

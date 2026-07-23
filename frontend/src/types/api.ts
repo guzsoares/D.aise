@@ -39,6 +39,18 @@ export type ApiPromptsPayload = {
   error?: string;
 };
 
+// Credencial secreta: a API nunca devolve o segredo — apenas se existe (hasKey),
+// uma máscara para exibição (maskedKey) e o modo de armazenamento (storageMode).
+export type ApiSecretField = {
+  apiKey?: string;
+  committedApiKey?: string;
+  token?: string;
+  committedToken?: string;
+  hasKey?: boolean;
+  maskedKey?: string;
+  storageMode?: "cloud" | "local";
+};
+
 export type ApiLlmConfig = {
   __lastSavedConfig: {
     provider: string;
@@ -46,10 +58,10 @@ export type ApiLlmConfig = {
     temperature: number;
     tokens: string;
   };
-  gemini: { apiKey: string; committedApiKey: string };
-  openai: { apiKey: string; committedApiKey: string };
+  gemini: ApiSecretField;
+  openai: ApiSecretField;
   ollama: { endpoint: string; committedEndpoint: string };
-  github: { token: string; committedToken: string };
+  github: ApiSecretField;
 };
 
 export type ApiModelOption = { value: string; label: string };

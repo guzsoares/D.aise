@@ -1,10 +1,27 @@
-# D.aise — sobe backend (Flask :8765) e frontend (Next.js :3000) juntos.
+# D.aise — sobe Postgres, backend (Flask :8765) e frontend (Next.js :3000).
 #
+#   # gere uma chave-mestra uma vez e exporte antes de subir:
+#   export DAISE_SECRET_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 #   docker compose up --build
 #
 # Acesse o app em http://localhost:3000 (a API fica em http://localhost:8765).
 
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: daise
+      POSTGRES_PASSWORD: daise
+      POSTGRES_DB: daise
+    volumes:
+      - ./backend/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U daise -d daise"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -13,10 +30,20 @@ services:
       - "8765:8765"
     env_file:
       - ./backend/.env
+    environment:
+      # Conexão com o serviço `db` (dentro da rede do compose).
+      DATABASE_URL: postgresql://daise:daise@db:5432/daise
+      # Chave-mestra para cifrar credenciais no modo 'cloud'. Vem do host;
+      # sem ela, credenciais cloud não podem ser salvas (as 'local' funcionam).
+      DAISE_SECRET_KEY: ${DAISE_SECRET_KEY:-}
     volumes:
-      # Persistem fora da imagem: config (tokens/API keys) e repositórios clonados.
+      # Persistem fora da imagem: config local (tokens/API keys no modo 'local')
+      # e repositórios clonados.
       - ./backend/data:/app/data
       - ./backend/repositories:/app/repositories
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:

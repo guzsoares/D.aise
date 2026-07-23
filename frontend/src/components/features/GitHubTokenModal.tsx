@@ -1,15 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Eye, EyeOff, Loader2, Save, X } from "lucide-react";
+import {
+  CheckCircle2,
+  Cloud,
+  Eye,
+  EyeOff,
+  HardDrive,
+  Loader2,
+  Save,
+  X,
+} from "lucide-react";
 import { getLlmConfig, saveLlmConfig } from "@/services/api";
 
 interface Props {
   onClose: () => void;
 }
 
+type StorageMode = "cloud" | "local";
+
 export default function GitHubTokenModal({ onClose }: Props) {
   const [token, setToken] = useState("");
+  const [hasSavedToken, setHasSavedToken] = useState(false);
+  const [maskedToken, setMaskedToken] = useState("");
+  const [storageMode, setStorageMode] = useState<StorageMode>("cloud");
   const [showToken, setShowToken] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -17,8 +31,13 @@ export default function GitHubTokenModal({ onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // O token nunca volta em texto puro: começa vazio, mostramos a máscara.
     getLlmConfig()
-      .then((config) => setToken(config.github?.committedToken ?? ""))
+      .then((config) => {
+        setHasSavedToken(!!config.github?.hasKey);
+        setMaskedToken(config.github?.maskedKey ?? "");
+        setStorageMode(config.github?.storageMode ?? "cloud");
+      })
       .catch(() => setError("Failed to load token."))
       .finally(() => setIsLoading(false));
   }, []);
@@ -31,13 +50,23 @@ export default function GitHubTokenModal({ onClose }: Props) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
+  async function persist(mode: StorageMode, newToken?: string) {
     setIsSaving(true);
     setSaveSuccess(false);
     setError(null);
     try {
-      await saveLlmConfig({ github: { token, committedToken: token } });
+      // Só envia o token se o usuário digitou um novo; a máscara nunca sobrescreve.
+      const github: Record<string, unknown> = { storageMode: mode };
+      const secret = (newToken ?? "").trim();
+      if (secret) {
+        github.token = secret;
+        github.committedToken = secret;
+      }
+      const res = await saveLlmConfig({ github });
+      setHasSavedToken(!!res.config.github?.hasKey);
+      setMaskedToken(res.config.github?.maskedKey ?? "");
+      setStorageMode(res.config.github?.storageMode ?? mode);
+      setToken("");
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -45,6 +74,17 @@ export default function GitHubTokenModal({ onClose }: Props) {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    await persist(storageMode, token);
+  }
+
+  function handleStorageModeChange(mode: StorageMode) {
+    if (mode === storageMode) return;
+    setStorageMode(mode);
+    persist(mode, token);
   }
 
   return (
@@ -82,12 +122,12 @@ export default function GitHubTokenModal({ onClose }: Props) {
                   type={showToken ? "text" : "password"}
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
-                  placeholder="ghp_…"
+                  placeholder={hasSavedToken ? `${maskedToken} — digite para trocar` : "ghp_…"}
                   className="min-w-0 flex-1 border-0 bg-transparent px-4 py-2.5 text-sm font-medium text-foreground placeholder:text-muted focus:outline-none focus:ring-0"
                   autoComplete="off"
                 />
                 <div className="flex shrink-0 items-center gap-1 border-l border-stroke pr-2 pl-1">
-                  {token ? (
+                  {token || hasSavedToken ? (
                     <CheckCircle2 className="size-5 text-brand" strokeWidth={1.75} aria-hidden />
                   ) : null}
                   <button
@@ -105,7 +145,36 @@ export default function GitHubTokenModal({ onClose }: Props) {
                 </div>
               </div>
 
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleStorageModeChange("cloud")}
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                    storageMode === "cloud"
+                      ? "border-brand/50 bg-brand/10 text-brand"
+                      : "border-stroke bg-surface-input text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <Cloud className="size-3.5" strokeWidth={1.75} aria-hidden />
+                  Nuvem
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleStorageModeChange("local")}
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                    storageMode === "local"
+                      ? "border-brand/50 bg-brand/10 text-brand"
+                      : "border-stroke bg-surface-input text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <HardDrive className="size-3.5" strokeWidth={1.75} aria-hidden />
+                  Local
+                </button>
+              </div>
               <p className="mt-2 text-xs text-zinc-500">
+                {storageMode === "cloud"
+                  ? "Cifrado e guardado no banco. "
+                  : "Guardado só no host, fora do banco. "}
                 Need a token?{" "}
                 <a
                   href="https://github.com/settings/tokens"
