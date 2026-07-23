@@ -358,9 +358,10 @@ export default function LLMConfigForm() {
             />
           </div>
           <div>
-            <FieldLabel>Tokens</FieldLabel>
+            <FieldLabel>Max output tokens (0 = sem limite)</FieldLabel>
             <input
               type="number"
+              min={0}
               value={tokens}
               onChange={(e) => setTokens(Number(e.target.value))}
               onBlur={() => persist()}
