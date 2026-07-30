@@ -306,19 +306,11 @@ class ProjectControl:
             else:
                 project.set_tree()
             
-            # 3️ Carrega default prompt
-            defaults_path = os.path.join("data", "config", "default_prompts.json")
-            if not os.path.exists(defaults_path):
-                print("\n\n got an error here \n\n")
-                return {"error": "Arquivo default_prompts.json não encontrado."}, 500
-
-            with open(defaults_path, "r", encoding="utf-8") as f:
-                defaults = json.load(f)
-
-            prompt_id = defaults.get("analyze_project")
+            # 3️ Carrega default prompt (do banco: prompts.is_default)
+            prompt_id = PromptModel().get_default_prompt_id("analyze_project")
 
             if not prompt_id:
-                return {"error": "Prompt default para create_readme não configurado."}, 400
+                return {"error": "Prompt default para analyze_project não configurado."}, 400
             
 
             prompt_model = PromptModel()

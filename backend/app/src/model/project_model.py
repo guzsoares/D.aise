@@ -101,13 +101,16 @@ class Project:
     _NON_COLUMN = {"dependence_file_content", "readme_content"}
 
     def _persist_dict(self, data: dict):
-        """Upsert (por folder_name) de um dict de projeto no banco."""
+        """Upsert (por user_id + folder_name) de um dict de projeto no banco."""
         from app.src.db import session_scope
-        from app.src.db_models import ProjectRow
+        from app.src.db_models import Project as ProjectRow
+        from app.src.service.user_context import current_user_id
 
+        uid = current_user_id()
         cols = set(ProjectRow.COLUMNS)
         folder_name = data.get("folder_name") or data.get("name") or "project"
         data["folder_name"] = folder_name
+        data["user_id"] = uid
 
         # Campos sem coluna dedicada (ex.: has_readme) vão para o JSONB `extra`.
         extra = {
@@ -118,11 +121,11 @@ class Project:
         with session_scope() as s:
             row = (
                 s.query(ProjectRow)
-                .filter(ProjectRow.folder_name == folder_name)
+                .filter(ProjectRow.user_id == uid, ProjectRow.folder_name == folder_name)
                 .one_or_none()
             )
             if row is None:
-                row = ProjectRow(folder_name=folder_name)
+                row = ProjectRow(folder_name=folder_name, user_id=uid)
                 s.add(row)
 
             for col in cols:
@@ -171,25 +174,35 @@ class Project:
         return data
 
     def get_all_projects(self):
-        """Retorna todos os projetos do banco como lista de dicts."""
+        """Retorna todos os projetos do usuário atual como lista de dicts."""
         from app.src.db import session_scope
-        from app.src.db_models import ProjectRow
+        from app.src.db_models import Project as ProjectRow
+        from app.src.service.user_context import current_user_id
 
+        uid = current_user_id()
         projects = []
         with session_scope() as s:
-            for row in s.query(ProjectRow).order_by(ProjectRow.created_at).all():
+            rows = (
+                s.query(ProjectRow)
+                .filter(ProjectRow.user_id == uid)
+                .order_by(ProjectRow.created_at)
+                .all()
+            )
+            for row in rows:
                 projects.append(self._row_to_dict(row))
         return projects
 
     def find_project_by_folder_name(self, folder_name: str):
-        """Carrega o projeto do banco, popula os atributos e retorna self (ou None)."""
+        """Carrega o projeto do usuário atual, popula os atributos e retorna self (ou None)."""
         from app.src.db import session_scope
-        from app.src.db_models import ProjectRow
+        from app.src.db_models import Project as ProjectRow
+        from app.src.service.user_context import current_user_id
 
+        uid = current_user_id()
         with session_scope() as s:
             row = (
                 s.query(ProjectRow)
-                .filter(ProjectRow.folder_name == folder_name)
+                .filter(ProjectRow.user_id == uid, ProjectRow.folder_name == folder_name)
                 .one_or_none()
             )
             if row is None:
@@ -204,12 +217,14 @@ class Project:
     def find_path_by_folder_name(self, folder_name: str):
         """Retorna o caminho (diretório) do projeto salvo, ou '' se não existir."""
         from app.src.db import session_scope
-        from app.src.db_models import ProjectRow
+        from app.src.db_models import Project as ProjectRow
+        from app.src.service.user_context import current_user_id
 
+        uid = current_user_id()
         with session_scope() as s:
             row = (
                 s.query(ProjectRow)
-                .filter(ProjectRow.folder_name == folder_name)
+                .filter(ProjectRow.user_id == uid, ProjectRow.folder_name == folder_name)
                 .one_or_none()
             )
             return row.path if row else ""
@@ -219,14 +234,16 @@ class Project:
         pass
 
     def delete_project(self, folder_name):
-        """Remove o projeto do banco. Retorna True se removeu algo."""
+        """Remove o projeto do usuário atual. Retorna True se removeu algo."""
         from app.src.db import session_scope
-        from app.src.db_models import ProjectRow
+        from app.src.db_models import Project as ProjectRow
+        from app.src.service.user_context import current_user_id
 
+        uid = current_user_id()
         with session_scope() as s:
             row = (
                 s.query(ProjectRow)
-                .filter(ProjectRow.folder_name == folder_name)
+                .filter(ProjectRow.user_id == uid, ProjectRow.folder_name == folder_name)
                 .one_or_none()
             )
             if row is None:

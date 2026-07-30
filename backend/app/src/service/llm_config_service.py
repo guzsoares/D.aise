@@ -17,8 +17,9 @@ import json
 import os
 
 from app.src.db import session_scope
-from app.src.db_models import LlmConfigRow
+from app.src.db_models import Credential, UserSettings
 from app.src.security import crypto
+from app.src.service.user_context import current_user_id
 
 _BACKEND_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..")
@@ -53,25 +54,83 @@ def _default_config() -> dict:
 
 # ─── persistência bruta ──────────────────────────────────────────────────────
 
+# Mapeamento dict interno (formato do frontend) <-> tabelas credentials + user_settings.
+# O dict `cfg` continua no mesmo formato de antes; só a origem/destino mudou.
+
 def _load_db() -> dict:
+    """Reconstrói o dict de config a partir de user_settings + credentials do usuário."""
+    uid = current_user_id()
+    cfg = _default_config()
     with session_scope() as s:
-        row = s.get(LlmConfigRow, 1)
-        if row is None or not row.data:
-            return _default_config()
-        # mescla sobre o default para tolerar chaves ausentes
-        cfg = _default_config()
-        _deep_merge(cfg, row.data)
-        return cfg
+        st = s.get(UserSettings, uid)
+        if st is not None:
+            cfg["__lastSavedConfig"] = {
+                "provider": st.provider,
+                "model": st.model,
+                "temperature": float(st.temperature) if st.temperature is not None else 0,
+                "tokens": str(st.max_output_tokens if st.max_output_tokens is not None else 0),
+            }
+        for c in s.query(Credential).filter(Credential.user_id == uid).all():
+            if c.provider == "ollama":
+                cfg["ollama"] = {"committedEndpoint": (c.meta or {}).get("endpoint", "")}
+            elif c.provider in SECRET_KEYS:
+                field = SECRET_KEYS[c.provider]
+                # committed* guarda o ciphertext (modo cloud) ou "" (modo local).
+                cfg[c.provider] = {field: c.secret_ciphertext or "", "storage_mode": c.storage_mode}
+    return cfg
 
 
 def _save_db(cfg: dict) -> None:
+    """Grava o dict de config de volta em user_settings + credentials do usuário."""
+    uid = current_user_id()
+    last = cfg.get("__lastSavedConfig", {}) or {}
+    local = _load_local()  # para computar máscara de segredos em modo local
+
     with session_scope() as s:
-        row = s.get(LlmConfigRow, 1)
+        st = s.get(UserSettings, uid)
+        if st is None:
+            st = UserSettings(user_id=uid)
+            s.add(st)
+        st.provider = last.get("provider") or "gemini"
+        st.model = last.get("model") or ""
+        try:
+            st.temperature = float(last.get("temperature") or 0)
+        except (TypeError, ValueError):
+            st.temperature = 0
+        try:
+            st.max_output_tokens = int(float(last.get("tokens") or 0))
+        except (TypeError, ValueError):
+            st.max_output_tokens = 0
+
+        existing = {c.provider: c for c in s.query(Credential).filter(Credential.user_id == uid).all()}
+
+        # Provedores com segredo (gemini/openai/github)
+        for prov, field in SECRET_KEYS.items():
+            provcfg = cfg.get(prov, {}) or {}
+            mode = (provcfg.get("storage_mode") or "cloud").lower()
+            cipher = provcfg.get(field, "") or ""
+            # Máscara para exibição: decifra cloud (best-effort) ou lê o arquivo local.
+            try:
+                plain = _read_secret(prov, field, provcfg, local)
+            except Exception:
+                plain = ""
+            masked = crypto.mask(plain) if plain else ""
+            row = existing.get(prov)
+            if row is None:
+                row = Credential(user_id=uid, provider=prov)
+                s.add(row)
+            row.secret_ciphertext = cipher
+            row.storage_mode = mode
+            row.masked_hint = masked
+
+        # Ollama (endpoint não-secreto em meta)
+        endpoint = (cfg.get("ollama", {}) or {}).get("committedEndpoint", "")
+        row = existing.get("ollama")
         if row is None:
-            row = LlmConfigRow(id=1, data=cfg)
+            row = Credential(user_id=uid, provider="ollama")
             s.add(row)
-        else:
-            row.data = cfg
+        row.meta = {"endpoint": endpoint}
+        row.storage_mode = "cloud"
 
 
 def _load_local() -> dict:

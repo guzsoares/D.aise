@@ -25,20 +25,31 @@ class Prompt:
 
     def load_all(self):
         from app.src.db import session_scope
-        from app.src.db_models import PromptRow, DefaultPromptRow
+        from app.src.db_models import Prompt as PromptRow
 
         with session_scope() as s:
-            prompts = {r.id: r.to_dict() for r in s.query(PromptRow).all()}
-            defaults = {
-                r.type: r.prompt_id
-                for r in s.query(DefaultPromptRow).all()
-                if r.prompt_id
-            }
+            rows = s.query(PromptRow).all()
+            prompts = {r.id: r.to_dict() for r in rows}
+            # defaults derivam da coluna is_default (1 por tipo).
+            defaults = {r.type: r.id for r in rows if r.is_default}
 
         return {
             "prompts": prompts,
             "defaults": defaults
         }
+
+    def get_default_prompt_id(self, prompt_type: str):
+        """Retorna o id do prompt marcado como default (is_default) para o tipo, ou None."""
+        from app.src.db import session_scope
+        from app.src.db_models import Prompt as PromptRow
+
+        with session_scope() as s:
+            row = (
+                s.query(PromptRow)
+                .filter(PromptRow.type == prompt_type, PromptRow.is_default.is_(True))
+                .first()
+            )
+            return row.id if row else None
 
     def get_prompt_by_id(self, prompt_id: str):
         """
@@ -46,7 +57,7 @@ class Prompt:
         e retorna a própria instância da model.
         """
         from app.src.db import session_scope
-        from app.src.db_models import PromptRow
+        from app.src.db_models import Prompt as PromptRow
 
         with session_scope() as s:
             row = s.get(PromptRow, prompt_id)
@@ -74,7 +85,7 @@ class Prompt:
             }
 
         from app.src.db import session_scope
-        from app.src.db_models import PromptRow
+        from app.src.db_models import Prompt as PromptRow
 
         prompt_id = data.get("id")
 
@@ -110,7 +121,7 @@ class Prompt:
 
     def set_default_prompt(self, prompt_id, prompt_type):
         from app.src.db import session_scope
-        from app.src.db_models import PromptRow, DefaultPromptRow
+        from app.src.db_models import Prompt as PromptRow
 
         with session_scope() as s:
             prompt = s.get(PromptRow, prompt_id)
@@ -126,23 +137,29 @@ class Prompt:
                     "error": "Cannot set an inactive prompt as default"
                 }
 
-            row = s.get(DefaultPromptRow, prompt_type)
-            if row is None:
-                s.add(DefaultPromptRow(type=prompt_type, prompt_id=prompt_id))
-            else:
-                row.prompt_id = prompt_id
+            # Desmarca o default anterior do tipo e marca o novo (índice único
+            # parcial garante no máximo 1 por tipo). Faz em duas etapas para não
+            # violar a constraint no meio do flush.
+            ptype = prompt.type  # captura antes da sessão fechar
+            s.query(PromptRow).filter(
+                PromptRow.type == ptype,
+                PromptRow.is_default.is_(True),
+                PromptRow.id != prompt_id,
+            ).update({"is_default": False})
+            s.flush()
+            prompt.is_default = True
 
         return {
             "success": True,
             "data": {
-                "type": prompt_type,
+                "type": ptype,
                 "prompt_id": prompt_id
             }
         }
 
     def delete(self, prompt_id: str) -> bool:
         from app.src.db import session_scope
-        from app.src.db_models import PromptRow
+        from app.src.db_models import Prompt as PromptRow
 
         with session_scope() as s:
             row = s.get(PromptRow, prompt_id)

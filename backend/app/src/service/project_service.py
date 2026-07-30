@@ -237,22 +237,8 @@ class ProjectService:
                 except Exception as e:
                     print(f"⚠️ Commits não pôde ser obtido para geração do README: {e}")
 
-            # 1. Caminho do arquivo de defaults
-            defaults_path = os.path.join("data", "config", "default_prompts.json")
-
-            if not os.path.exists(defaults_path):
-                print("\n\n got an error here \n\n")
-                return {"error": "Arquivo default_prompts.json não encontrado."}, 500
-
-            print("aqui esta indo 🎃 3")
-
-            # 2. Carrega defaults
-            with open(defaults_path, "r", encoding="utf-8") as f:
-                defaults = json.load(f)
-
-            prompt_id = defaults.get("create_readme")
-
-            print("aqui esta indo 🎃 4")
+            # 1-2. Default prompt do banco (prompts.is_default)
+            prompt_id = PromptModel().get_default_prompt_id("create_readme")
 
             if not prompt_id:
                 return {"error": "Prompt default para create_readme não configurado."}, 400
@@ -607,13 +593,10 @@ class ProjectService:
         prompt_model = PromptModel()
         prompt_model.project = project
 
-        # Caminho do arquivo de defaults
-        defaults_path = os.path.join("data", "config", "default_prompts.json")
-        
-        with open(defaults_path, "r", encoding="utf-8") as f:
-            defaults = json.load(f)
-
-        prompt_id = defaults.get("update_readme")
+        # Default prompt do banco (prompts.is_default)
+        prompt_id = prompt_model.get_default_prompt_id("update_readme")
+        if not prompt_id:
+            return {"error": "Prompt default para update_readme não configurado."}, 400
 
         prompt = prompt_model.get_prompt_by_id(prompt_id)
 

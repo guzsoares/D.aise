@@ -26,6 +26,9 @@ def _startup_checks():
         from app.src.db import init_db
         init_db()
         print("✅ Banco inicializado (tabelas verificadas).")
+        from app.src.service.user_context import ensure_bootstrap_user
+        ensure_bootstrap_user()
+        print("✅ Usuário bootstrap garantido.")
     except Exception as e:
         print(f"⚠️  Falha ao inicializar o banco: {e}")
 

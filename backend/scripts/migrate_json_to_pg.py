@@ -1,16 +1,15 @@
 """
-Migra os dados dos arquivos JSON legados para o PostgreSQL.
+Cria o schema, garante o usuário bootstrap e importa dados legados (JSON) para
+o PostgreSQL. Idempotente.
 
-Idempotente: pode rodar mais de uma vez (faz upsert). Executa:
-
+Executa:
   1. Cria as tabelas (se ainda não existirem).
-  2. Seed dos prompts versionados      (prompts/prompts.json).
-  3. Importa os prompts padrão          (data/config/default_prompts.json), com
-     fallback automático para o 1º prompt ativo de cada tipo.
-  4. Importa os projetos                 (data/repositories/*.json).
-  5. Importa a config de LLM/credenciais (data/config/llm_config.json), cifrando
-     os segredos no modo 'cloud' quando DAISE_SECRET_KEY está definida (senão
-     salva no modo 'local', em arquivo, para não perder dado).
+  2. Garante o usuário bootstrap (dono dos dados enquanto não há login na UI).
+  3. Seed dos prompts versionados      (prompts/prompts.json).
+  4. Marca os prompts padrão (is_default) a partir de data/config/default_prompts.json,
+     com fallback para o 1º prompt ativo de cada tipo.
+  5. Importa os projetos                 (data/repositories/*.json) para o bootstrap.
+  6. Importa a config de LLM/credenciais (data/config/llm_config.json) para o bootstrap.
 
 Uso (a partir de backend/):
     python -m scripts.migrate_json_to_pg
@@ -19,7 +18,6 @@ import json
 import os
 import sys
 
-# Garante que `import app...` funcione ao rodar como script.
 _BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
@@ -42,7 +40,7 @@ def _read_json(path):
 
 def seed_prompts():
     from app.src.db import session_scope
-    from app.src.db_models import PromptRow
+    from app.src.db_models import Prompt as PromptRow
 
     prompts = _read_json(os.path.join(_BACKEND_DIR, "prompts", "prompts.json")) or {}
     if not prompts:
@@ -66,17 +64,14 @@ def seed_prompts():
 
 def seed_defaults():
     from app.src.db import session_scope
-    from app.src.db_models import PromptRow, DefaultPromptRow
+    from app.src.db_models import Prompt as PromptRow
 
     defaults = _read_json(
         os.path.join(_BACKEND_DIR, "data", "config", "default_prompts.json")
     ) or {}
 
     with session_scope() as s:
-        # 1) defaults explícitos do arquivo
         desired = {t: pid for t, pid in defaults.items() if pid}
-
-        # 2) fallback: tipo sem default -> 1º prompt ativo daquele tipo
         types = {t for (t,) in s.query(PromptRow.type).distinct()}
         for ptype in types:
             if ptype in desired:
@@ -90,13 +85,17 @@ def seed_defaults():
             if first:
                 desired[ptype] = first.id
 
-        # 3) upsert único por tipo
         for ptype, pid in desired.items():
-            row = s.get(DefaultPromptRow, ptype)
-            if row is None:
-                s.add(DefaultPromptRow(type=ptype, prompt_id=pid))
-            else:
-                row.prompt_id = pid
+            # desmarca defaults antigos do tipo e marca o escolhido
+            s.query(PromptRow).filter(
+                PromptRow.type == ptype,
+                PromptRow.is_default.is_(True),
+                PromptRow.id != pid,
+            ).update({"is_default": False})
+            s.flush()
+            row = s.get(PromptRow, pid)
+            if row:
+                row.is_default = True
     print("  defaults por tipo garantidos.")
 
 
@@ -114,6 +113,7 @@ def import_projects():
         data = _read_json(os.path.join(repo_dir, filename))
         if not isinstance(data, dict):
             continue
+        data.pop("user_id", None)  # será atribuído ao usuário bootstrap
         Project().save_json(dict(data))
         count += 1
     print(f"  {count} projeto(s) importado(s).")
@@ -161,9 +161,14 @@ def import_llm_config():
 
 def main():
     from app.src.db import init_db
+    from app.src.service.user_context import ensure_bootstrap_user
 
     print("→ Criando/verificando tabelas...")
     init_db()
+
+    print("→ Garantindo usuário bootstrap...")
+    uid = ensure_bootstrap_user()
+    print(f"  usuário bootstrap: {uid}")
 
     print("→ Importando prompts...")
     seed_prompts()
