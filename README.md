@@ -362,6 +362,13 @@ The Flask server runs on `http://localhost:8765`.
 | `GET` | `/api/models` | List available LLM models by provider |
 | `GET` | `/api/llm-config` | Get saved LLM configuration |
 | `POST` | `/api/llm-config` | Save LLM configuration |
+| `POST` | `/auth/register` | Register a user |
+| `POST` | `/auth/login` | Log in, returns a bearer token |
+| `POST` | `/auth/logout` | Revoke the current session |
+| `GET` | `/auth/me` | Current user (requires bearer token) |
+| `GET` | `/projects/<name>/history` | Generation history (with decisions) |
+| `GET` | `/projects/<name>/generations/<id>` | Full generation detail (prompt sent + output) |
+| `POST` | `/projects/<name>/decision` | Record an approve/reject decision |
 
 ## 📊 Experiments
 

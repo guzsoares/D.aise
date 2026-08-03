@@ -40,8 +40,30 @@ def ensure_bootstrap_user() -> str:
     return _cached_id
 
 
+def _user_id_from_request() -> str | None:
+    """Resolve o usuário pelo token Bearer da requisição, se houver contexto Flask."""
+    try:
+        from flask import request, has_request_context
+
+        if not has_request_context():
+            return None
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return None
+        token = auth[len("Bearer "):].strip()
+        if not token:
+            return None
+        from app.src.service.auth_service import resolve_user_id_from_token
+        return resolve_user_id_from_token(token)
+    except Exception:
+        return None
+
+
 def current_user_id() -> str:
-    """Id do usuário atual (hoje, o bootstrap). Ponto único a trocar quando houver login."""
+    """Id do usuário atual: token da requisição (se logado) ou o usuário bootstrap."""
+    uid = _user_id_from_request()
+    if uid:
+        return uid
     if _cached_id:
         return _cached_id
     return ensure_bootstrap_user()
