@@ -21,6 +21,13 @@ class Agent:
         self.prompt = prompt
         self.project = project
         self.llm_config = llm_config or {}
+        # Metadados da última execução (para o histórico de gerações).
+        self.last_provider = None
+        self.last_model = None
+        self.last_temperature = None
+        self.last_max_tokens = None
+        self.last_usage = None          # {"input": int, "output": int}
+        self.last_duration_ms = None
 
     def _resolve_llm_settings(self):
         """
@@ -237,29 +244,42 @@ class Agent:
 
         if not USE_LLM:
             print("USE_LLM desativado. Usando mockup.")
+            self.last_provider = "mockup"
+            self.last_duration_ms = 0
             return self.load_mockup()
 
         llm_provider, model_name, api_key, ollama_url = self._resolve_llm_settings()
         temperature, max_tokens = self._resolve_generation_params()
         print(f"Generation params -> temperature: {temperature}, max_tokens: {max_tokens}")
 
+        # Registra o que efetivamente vai rodar (para o histórico de gerações).
+        self.last_provider = llm_provider
+        self.last_model = model_name
+        self.last_temperature = temperature
+        self.last_max_tokens = max_tokens
+
         if llm_provider == "openai":
             raise RuntimeError("Provedor OpenAI ainda não suportado no backend.")
 
-        if llm_provider == "ollama":
-            return self._run_ollama(
-                model_name=model_name,
-                ollama_url=ollama_url,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-
-        return self._run_gemini(
-            model_name=model_name,
-            api_key=api_key,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        start = time.perf_counter()
+        try:
+            if llm_provider == "ollama":
+                result = self._run_ollama(
+                    model_name=model_name,
+                    ollama_url=ollama_url,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            else:
+                result = self._run_gemini(
+                    model_name=model_name,
+                    api_key=api_key,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+        finally:
+            self.last_duration_ms = int((time.perf_counter() - start) * 1000)
+        return result
 
     def _run_gemini(self, model_name: str, api_key: str, temperature=None, max_tokens=None):
         if not api_key:
@@ -282,6 +302,15 @@ class Agent:
 
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(**generate_kwargs)
+            try:
+                um = getattr(response, "usage_metadata", None)
+                if um is not None:
+                    self.last_usage = {
+                        "input": getattr(um, "prompt_token_count", None),
+                        "output": getattr(um, "candidates_token_count", None),
+                    }
+            except Exception:
+                pass
             return response.text
         except Exception as e:
             print(f"Erro ao gerar conteúdo: {e}")
@@ -315,6 +344,10 @@ class Agent:
         if "response" not in data:
             error_msg = data.get("error", str(data))
             raise RuntimeError(f"Ollama retornou resposta inesperada: {error_msg}")
+        self.last_usage = {
+            "input": data.get("prompt_eval_count"),
+            "output": data.get("eval_count"),
+        }
         return data["response"]
 
     def summarize_text(self, text: str, max_chunk_tokens: int = 30000) -> str:

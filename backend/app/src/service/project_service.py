@@ -275,7 +275,25 @@ class ProjectService:
             #  Salva o conteúdo do README no diretório sequencial
             self._save_generated_readme(project, content)
 
-            return {"content": parsed.get("content", raw_response)}, 200
+            # Histórico da execução
+            from app.src.service.history_service import record_generation
+            gen_id = record_generation(
+                folder_name=data.get("folder_name"),
+                operation="create_readme",
+                agent=agent,
+                output=content,
+                prompt_id=prompt_id,
+                inputs={
+                    "tree": bool(data.get("tree")),
+                    "commit_options": data.get("commit_options") or [],
+                    "language": data.get("language"),
+                    "framework": data.get("framework"),
+                    "dependence_file_name": data.get("dependence_file_name"),
+                    "has_description": bool(data.get("description")),
+                },
+            )
+
+            return {"content": content, "generation_id": gen_id}, 200
 
         except Exception as e:
             print("Erro em generate_readme:", e)
@@ -632,7 +650,30 @@ class ProjectService:
         else:
             old_readme = project.readme_content
 
-        return {"content": {"old_readme": old_readme, "updated_readme": content}, "path": readme_path}, 200
+        # Histórico da execução
+        from app.src.service.history_service import record_generation
+        gen_id = record_generation(
+            folder_name=data.get("folder_name"),
+            operation="update_readme",
+            agent=agent,
+            output=content,
+            prompt_id=prompt_id,
+            previous_readme=old_readme,
+            inputs={
+                "commit_options": data.get("commit_options") or [],
+                "range_type": data.get("range_type"),
+                "start_date": data.get("start_date"),
+                "end_date": data.get("end_date"),
+                "language": data.get("language"),
+                "framework": data.get("framework"),
+            },
+        )
+
+        return {
+            "content": {"old_readme": old_readme, "updated_readme": content},
+            "path": readme_path,
+            "generation_id": gen_id,
+        }, 200
 
 
 
@@ -659,9 +700,14 @@ class ProjectService:
             # Caminho final do README.md
             readme_path = os.path.join(path, "README.md")
 
+            folder_name = data.get("folder_project") or os.path.basename(os.path.normpath(path))
+            from app.src.service.history_service import record_decision
+
             # Verifica USO DE LLM
             USE_LLM = os.getenv("USE_LLM") in ["1", "true", "True", "TRUE"]
             if not USE_LLM:
+                record_decision(folder_name, decision="approved", apply_target="local",
+                                 generation_id=data.get("generation_id"))
                 return {
                     "message": "README aplicado com sucesso. (MOCKUP MODE)",
                     "readme_path": readme_path
@@ -672,6 +718,8 @@ class ProjectService:
             with open(readme_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
+            record_decision(folder_name, decision="approved", apply_target="local",
+                             generation_id=data.get("generation_id"))
             return {
                 "message": "README aplicado com sucesso.",
                 "readme_path": readme_path
@@ -713,6 +761,11 @@ class ProjectService:
             full_message = f"{commit_title}\n\n{commit_message}".strip() if commit_title else commit_message
             result = svc.create_or_update_readme(owner, repo_name, readme_content, full_message)
             html_url = result.get("content", {}).get("html_url", "")
+
+            from app.src.service.history_service import record_decision
+            record_decision(folder_name, decision="approved", apply_target="github",
+                            commit_url=html_url, generation_id=data.get("generation_id"))
+
             return {"message": "README aplicado ao repositório GitHub com sucesso.", "url": html_url}, 200
 
         except RuntimeError as e:
@@ -807,6 +860,11 @@ class ProjectService:
                 }, 500
 
             commit_hash = hash_result.stdout.strip()
+
+            folder_name = data.get("folder_project") or os.path.basename(os.path.normpath(repo_path))
+            from app.src.service.history_service import record_decision
+            record_decision(folder_name, decision="approved", apply_target="git_commit",
+                            commit_hash=commit_hash, generation_id=data.get("generation_id"))
 
             return {
                 "message": "Commit realizado com sucesso!",
