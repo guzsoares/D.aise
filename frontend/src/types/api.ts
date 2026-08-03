@@ -1,3 +1,19 @@
+export type ApiUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ApiAuthResponse = {
+  token: string;
+  user: ApiUser;
+  expires_at: string;
+};
+
 export type ApiProject = {
   id: string;
   name: string;

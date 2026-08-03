@@ -17,7 +17,11 @@ app = Flask(__name__, template_folder=template_dir, static_folder=static_dir)
 
 # registra TODAS as rotas
 register_routes(app)
-CORS(app, origins=["http://localhost:3000", "https://docsaise.aise-lab.com"])
+CORS(
+    app,
+    origins=["http://localhost:3000", "https://docsaise.aise-lab.com"],
+    allow_headers=["Content-Type", "Authorization"],
+)
 
 
 def _startup_checks():
