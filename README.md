@@ -173,8 +173,8 @@ python -m scripts.migrate_json_to_pg
 | Path | In Git? | Purpose |
 |------|---------|---------|
 | `backend/config/models.json` | Yes | LLM model catalog shown in the UI |
-| `backend/.env` | No | `USE_LLM`, `DEBUG`, `DATABASE_URL`, `DAISE_SECRET_KEY` |
-| PostgreSQL (`projects`, `prompts`, `default_prompts`, `llm_config`) | — | Projects, prompt library, and encrypted LLM config |
+| `backend/.env` | No | `USE_LLM`, `DEBUG`, `DATABASE_URL`, `DAISE_SECRET_KEY`, `DAISE_BOOTSTRAP_*` |
+| PostgreSQL (`users`, `auth_sessions`, `credentials`, `user_settings`, `projects`, `prompts`, `generations`, `review_decisions`) | — | All app data: accounts, per-user encrypted credentials, projects, prompt library, and generation history |
 | `backend/data/config/llm_config_local.json` | No | Credentials saved in **local** mode only |
 
 ### Step 3: Set Up the Frontend
@@ -253,16 +253,32 @@ No local Python, Node, or Git installation is needed on the host — everything 
 
 ### Quick start
 
-From the repository root, first export a master key (used to encrypt credentials
-saved in "cloud" mode), then bring the stack up:
+Everything is configured through a single `.env` file at the repository root.
+
+**1. Create your `.env`:**
 
 ```bash
-export DAISE_SECRET_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+cp .env.example .env
+```
+
+**2. Generate a master key** (encrypts credentials saved in "cloud" mode) and paste it into `.env` as `DAISE_SECRET_KEY`:
+
+```bash
+# with Python:
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# or with Docker only (no Python needed):
+docker run --rm python:3.12-slim sh -c "pip -q install cryptography && python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+```
+
+**3. Bring the stack up:**
+
+```bash
 docker compose up --build
 ```
 
-This builds the images and starts the services (the backend applies migrations
-and seeds prompts automatically on boot):
+This builds the images and starts all three services. The backend **applies the
+Alembic migrations and seeds the database automatically on boot** (creates the
+tables, the 9 prompts, and the initial admin user).
 
 | Service | URL | Container port → Host port |
 |---------|-----|----------------------------|
@@ -270,7 +286,24 @@ and seeds prompts automatically on boot):
 | Backend (Flask API) | http://localhost:8765 | 8765 → 8765 |
 | PostgreSQL | (internal) | 5432 |
 
-> **Master key:** without `DAISE_SECRET_KEY`, credentials can still be saved in **local** mode; "cloud" (encrypted) mode requires the key. Keep the same key across restarts, or previously encrypted credentials become unreadable.
+Open `http://localhost:3000`, and log in at `/login` with the admin credentials
+from your `.env` (`DAISE_BOOTSTRAP_EMAIL` / `DAISE_BOOTSTRAP_PASSWORD`), or
+register a new account.
+
+> **Master key:** `docker compose up` fails on purpose if `DAISE_SECRET_KEY` is
+> not set. Keep the same key across restarts, or previously encrypted
+> credentials become unreadable.
+
+### What to configure in `.env`
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `DAISE_SECRET_KEY` | **Yes** | Fernet key that encrypts "cloud" credentials |
+| `DAISE_BOOTSTRAP_EMAIL` / `DAISE_BOOTSTRAP_PASSWORD` | No (defaults) | Initial admin login |
+| `USE_LLM` | No (default `true`) | `false` uses mockup output (no API calls) |
+| `DEBUG` | No (default `false`) | Flask debug mode |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | No (defaults) | Database credentials |
+| `NEXT_PUBLIC_API_URL` | No (default `http://localhost:8765`) | API URL reachable from the browser |
 
 Open your browser at `http://localhost:3000`.
 
@@ -278,19 +311,22 @@ To stop the stack, press `Ctrl+C`, or run `docker compose down` from another ter
 
 ### Configuration
 
-- **Backend `.env`** — the `backend` service reads `backend/.env` (same file used for the manual setup). Make sure it exists with at least `USE_LLM` and `DEBUG`. See [Backend environment variables](#backend-environment-variables).
-- **LLM providers, API keys, and the GitHub token** — configure them through the web UI exactly as in the manual setup. They are persisted to `backend/data/config/llm_config.json` on the host (see Volumes below), so they survive container restarts and rebuilds.
-- **Backend API URL** — the frontend reads `NEXT_PUBLIC_API_URL` at **build time** (the browser calls the API directly, so the URL must be reachable from your machine, not from inside the Docker network). It defaults to `http://localhost:8765`. To point the frontend at a different host/port, edit the `args` under the `frontend` service in `docker-compose.yml` and rebuild (`docker compose up --build`).
+- **Single `.env` at the repo root** — every setting (master key, admin login, `USE_LLM`, Postgres credentials, API URL) lives in the root `.env`. See [What to configure in `.env`](#what-to-configure-in-env) above. There is no separate `backend/.env` in the Docker flow.
+- **LLM providers, API keys, and the GitHub token** — configure them through the web UI after logging in. They are stored **per user** in PostgreSQL: "cloud" credentials are encrypted with `DAISE_SECRET_KEY`; "local" credentials stay on the host in `backend/data/config/llm_config_local.json`. Both survive restarts (the DB lives in the `pgdata` volume).
+- **Backend API URL** — the frontend reads `NEXT_PUBLIC_API_URL` at **build time** (the browser calls the API directly, so the URL must be reachable from your machine). Set it in `.env` and rebuild with `docker compose up --build`.
 
 ### Volumes (persisted data)
 
 The following host directories are mounted into the backend container so data survives rebuilds:
 
-| Host path | Container path | Contents |
-|-----------|----------------|----------|
-| `backend/pgdata/` | `/var/lib/postgresql/data` | PostgreSQL data (projects, prompts, encrypted config) |
-| `backend/data/` | `/app/data` | Credentials saved in **local** mode + cloned repo metadata |
+| Volume / Host path | Container path | Contents |
+|--------------------|----------------|----------|
+| `pgdata` (named volume) | `/var/lib/postgresql/data` | PostgreSQL data (projects, prompts, history, encrypted config) |
+| `backend/data/` | `/app/data` | Credentials saved in **local** mode |
 | `backend/repositories/` | `/app/repositories` | Cloned/imported repositories |
+
+> The database lives in the Docker-managed named volume `pgdata` (survives
+> rebuilds). To wipe everything and start fresh: `docker compose down -v`.
 
 > **Security note:** credentials saved in **cloud** mode are encrypted with `DAISE_SECRET_KEY` before being stored in PostgreSQL. Credentials saved in **local** mode live in `backend/data/config/llm_config_local.json` in plain text — keep that directory private and never commit it.
 
