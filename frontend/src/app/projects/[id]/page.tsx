@@ -371,7 +371,15 @@ function ProjectsDashboardContent({ projectId }: { projectId: string }) {
     setIsGenerating(true);
     setError(null);
     try {
-      const llmConfig = await getLlmConfig();
+      const savedConfig = await getLlmConfig();
+      // O modelo escolhido no modal sobrescreve o provider/modelo salvos. O
+      // backend prioriza llm_provider/model no payload e resolve o segredo
+      // server-side pelo provider.
+      const llmConfig = {
+        ...savedConfig,
+        llm_provider: formData.provider,
+        model: formData.model,
+      };
       const commitOptions: string[] = [
         ...(formData.includeCommitsTitleDesc ? ["title_description"] : []),
         ...(formData.includeCommitsDiffs ? ["diffs"] : []),
@@ -405,7 +413,12 @@ function ProjectsDashboardContent({ projectId }: { projectId: string }) {
     setIsUpdating(true);
     setError(null);
     try {
-      const llmConfig = await getLlmConfig();
+      const savedConfig = await getLlmConfig();
+      const llmConfig = {
+        ...savedConfig,
+        llm_provider: formData.provider,
+        model: formData.model,
+      };
       const res = await updateReadme({
         folder_name: project.folder_name,
         name: projectName,
