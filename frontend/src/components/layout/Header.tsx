@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, User as UserIcon } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { headerNav, isActive } from "./nav-config";
 import { useAuth } from "@/context/AuthContext";
 
@@ -45,13 +45,15 @@ export default function Header() {
         {user ? (
           <Link
             href="/profile"
-            className={`inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
-              pathname === "/profile" ? "text-brand" : "text-zinc-400 hover:text-zinc-100"
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+              pathname === "/profile"
+                ? "border-brand/50 bg-brand/10 text-brand"
+                : "border-stroke text-zinc-400 hover:border-zinc-700 hover:text-zinc-100"
             }`}
-            title="Minha conta"
+            title="Configurações"
           >
-            <UserIcon className="size-4" strokeWidth={1.75} aria-hidden />
-            <span className="hidden sm:inline">{user.name || user.email}</span>
+            <Settings className="size-4" strokeWidth={1.75} aria-hidden />
+            <span className="hidden sm:inline">Configurações</span>
           </Link>
         ) : null}
         <button
