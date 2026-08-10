@@ -244,7 +244,7 @@ export default function UpdateReadmeModal({
           <form className="space-y-7" onSubmit={handleSubmit}>
             <section>
               <h3 className="mb-3 text-sm font-semibold text-zinc-100">
-                Modelo de IA
+                Provedor de IA
               </h3>
               <ModelPicker
                 value={selection}

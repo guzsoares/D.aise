@@ -165,10 +165,10 @@ export default function GenerateReadmeModal({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <form className="space-y-3" onSubmit={handleSubmit}>
-            {/* Seletor de modelo — só provedores com credencial ficam ativos */}
+            {/* Seletor de provedor — só provedores com credencial ficam ativos */}
             <div className="mb-2">
               <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted">
-                Modelo de IA
+                Provedor de IA
               </label>
               <ModelPicker
                 value={{ provider: state.provider, model: state.model }}
