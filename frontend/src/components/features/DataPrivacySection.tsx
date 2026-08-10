@@ -3,15 +3,14 @@
 import { useState } from "react";
 import { AlertTriangle, KeyRound, Loader2 } from "lucide-react";
 import { clearCredentials } from "@/services/api";
-
-type Action = "credentials" | "history";
+import { useConfirm } from "@/context/ConfirmContext";
 
 function DangerRow({
   icon,
   title,
   description,
   buttonLabel,
-  confirmText,
+  confirm,
   onConfirm,
   reloadAfter,
 }: {
@@ -19,25 +18,34 @@ function DangerRow({
   title: string;
   description: string;
   buttonLabel: string;
-  confirmText: string;
+  confirm: {
+    title: string;
+    description: string;
+    confirmLabel: string;
+  };
   onConfirm: () => Promise<{ message: string; removed: number }>;
   reloadAfter?: boolean;
 }) {
-  const [confirming, setConfirming] = useState(false);
+  const ask = useConfirm();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function run() {
+  async function handleClick() {
+    const ok = await ask({
+      title: confirm.title,
+      description: confirm.description,
+      confirmLabel: confirm.confirmLabel,
+      danger: true,
+    });
+    if (!ok) return;
+
     setBusy(true);
     setError(null);
     try {
       const res = await onConfirm();
       setResult(`${res.message} (${res.removed})`);
-      setConfirming(false);
-      if (reloadAfter) {
-        setTimeout(() => window.location.reload(), 800);
-      }
+      if (reloadAfter) setTimeout(() => window.location.reload(), 800);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao executar.");
     } finally {
@@ -57,42 +65,15 @@ function DangerRow({
         </div>
       </div>
 
-      <div className="shrink-0">
-        {confirming ? (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-400">{confirmText}</span>
-            <button
-              type="button"
-              onClick={run}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-rose-500 disabled:opacity-70"
-            >
-              {busy ? <Loader2 className="size-3.5 animate-spin" strokeWidth={2} /> : null}
-              Confirmar
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              disabled={busy}
-              className="rounded-lg border border-stroke px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:text-zinc-100"
-            >
-              Cancelar
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              setConfirming(true);
-              setResult(null);
-              setError(null);
-            }}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-300 transition hover:bg-rose-500/20"
-          >
-            {buttonLabel}
-          </button>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={busy}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-70"
+      >
+        {busy ? <Loader2 className="size-3.5 animate-spin" strokeWidth={2} /> : null}
+        {buttonLabel}
+      </button>
     </div>
   );
 }
@@ -114,7 +95,12 @@ export default function DataPrivacySection() {
           title="Limpar credenciais (chaves e tokens)"
           description="Remove todas as chaves e tokens (Gemini, OpenAI, GitHub, Ollama) do banco e do host — cifradas ou locais. Sem rastro."
           buttonLabel="Limpar credenciais"
-          confirmText="Apagar todas as chaves?"
+          confirm={{
+            title: "Apagar todas as credenciais?",
+            description:
+              "Isto remove todas as suas chaves e tokens (Gemini, OpenAI, GitHub, Ollama), do banco e do host. A ação é irreversível.",
+            confirmLabel: "Apagar credenciais",
+          }}
           onConfirm={clearCredentials}
           reloadAfter
         />

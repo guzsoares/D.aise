@@ -9,6 +9,7 @@ import MainContentArea from "@/components/layout/MainContentArea";
 import { PromptLabProvider } from "@/context/PromptLabContext";
 import { SidebarProvider } from "@/context/SidebarContext";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { ConfirmProvider } from "@/context/ConfirmContext";
 
 function FullScreenSpinner() {
   return (
@@ -21,15 +22,17 @@ function FullScreenSpinner() {
 /** Chrome da aplicação (só quando autenticado). */
 function AppShell({ children }: { children: ReactNode }) {
   return (
-    <PromptLabProvider>
-      <SidebarProvider>
-        <Header />
-        <div className="fixed left-0 top-16 z-[100] flex h-[calc(100vh-4rem)]">
-          <Sidebar />
-        </div>
-        <MainContentArea>{children}</MainContentArea>
-      </SidebarProvider>
-    </PromptLabProvider>
+    <ConfirmProvider>
+      <PromptLabProvider>
+        <SidebarProvider>
+          <Header />
+          <div className="fixed left-0 top-16 z-[100] flex h-[calc(100vh-4rem)]">
+            <Sidebar />
+          </div>
+          <MainContentArea>{children}</MainContentArea>
+        </SidebarProvider>
+      </PromptLabProvider>
+    </ConfirmProvider>
   );
 }
 

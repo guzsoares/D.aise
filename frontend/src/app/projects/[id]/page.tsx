@@ -42,6 +42,7 @@ import {
   updateReadme,
 } from "@/services/api";
 import { parseAsciiTree } from "@/utils/tree-parser";
+import { useConfirm } from "@/context/ConfirmContext";
 
 /* ——— Árvore de ficheiros ——— */
 
@@ -218,6 +219,7 @@ function ProjectsDashboardContent({ projectId }: { projectId: string }) {
   // projectId = folder_name, vindo do segmento dinâmico /projects/[id]
 
   const isLocalMode = process.env.NEXT_PUBLIC_APP_MODE === "local";
+  const confirm = useConfirm();
 
   // Full project from backend
   const [project, setProject] = useState<ApiProject | null>(null);
@@ -352,10 +354,15 @@ function ProjectsDashboardContent({ projectId }: { projectId: string }) {
     }
   }, [project, isAnalyzing]);
 
-  function handleCreateReadme() {
+  async function handleCreateReadme() {
     if (!project) return;
     if (hasReadme) {
-      if (!window.confirm("A README already exists. Do you want to overwrite or create another?")) return;
+      const ok = await confirm({
+        title: "Já existe um README",
+        description: "Já existe um README neste projeto. Deseja gerar uma nova versão mesmo assim?",
+        confirmLabel: "Gerar nova versão",
+      });
+      if (!ok) return;
     }
     setIsGenerateReadmeModalOpen(true);
   }
