@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, User as UserIcon } from "lucide-react";
 import { headerNav, isActive } from "./nav-config";
 import GitHubTokenModal from "@/components/features/GitHubTokenModal";
 import { useAuth } from "@/context/AuthContext";
@@ -62,9 +62,16 @@ export default function Header() {
 
       <div className="flex items-center gap-3 justify-self-end">
         {user ? (
-          <span className="hidden text-sm text-zinc-400 sm:inline" title={user.email}>
-            {user.name || user.email}
-          </span>
+          <Link
+            href="/profile"
+            className={`inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
+              pathname === "/profile" ? "text-brand" : "text-zinc-400 hover:text-zinc-100"
+            }`}
+            title="Minha conta"
+          >
+            <UserIcon className="size-4" strokeWidth={1.75} aria-hidden />
+            <span className="hidden sm:inline">{user.name || user.email}</span>
+          </Link>
         ) : null}
         <button
           type="button"

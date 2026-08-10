@@ -27,6 +27,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<ApiUser>;
   logout: () => Promise<void>;
+  applyUser: (user: ApiUser) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -95,9 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus("unauthenticated");
   }, []);
 
+  const applyUser = useCallback((u: ApiUser) => setUser(u), []);
+
   const value = useMemo(
-    () => ({ status, user, login, register, logout }),
-    [status, user, login, register, logout],
+    () => ({ status, user, login, register, logout, applyUser }),
+    [status, user, login, register, logout, applyUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

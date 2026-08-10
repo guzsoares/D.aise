@@ -8,6 +8,7 @@ import type {
   ApiUpdateReadmeResponse,
   ApiAuthResponse,
   ApiUser,
+  ApiGeneration,
 } from "@/types/api";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8765";
@@ -99,6 +100,28 @@ export function authMe(): Promise<{ user: ApiUser }> {
 
 export function clearCredentials(): Promise<{ message: string; removed: number }> {
   return req("/account/credentials", { method: "DELETE" });
+}
+
+export function updateProfile(data: {
+  email?: string;
+  name?: string;
+}): Promise<{ user: ApiUser }> {
+  return req("/account/profile", { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export function changePassword(data: {
+  current_password: string;
+  new_password: string;
+}): Promise<{ message: string }> {
+  return req("/account/password", { method: "POST", body: JSON.stringify(data) });
+}
+
+export function getAccountHistory(): Promise<ApiGeneration[]> {
+  return req("/account/history");
+}
+
+export function getAccountGeneration(id: string): Promise<ApiGeneration> {
+  return req(`/account/generations/${id}`);
 }
 
 // ─── Projects ─────────────────────────────────────────────────────────────────

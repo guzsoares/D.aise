@@ -1,5 +1,4 @@
 import LLMConfigForm from "@/components/features/LLMConfigForm";
-import DataPrivacySection from "@/components/features/DataPrivacySection";
 
 export default function ConfigModelPage() {
   return (
@@ -10,9 +9,8 @@ export default function ConfigModelPage() {
       <p className="mt-2 max-w-2xl text-center text-base text-zinc-400">
         Configure the language model used for documentation generation.
       </p>
-      <div className="mt-8 w-full max-w-3xl space-y-8">
+      <div className="mt-8 w-full max-w-3xl">
         <LLMConfigForm />
-        <DataPrivacySection />
       </div>
     </div>
   );

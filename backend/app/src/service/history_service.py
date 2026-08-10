@@ -130,6 +130,48 @@ def list_history(folder_name: str, limit: int = 50) -> list[dict]:
         return out
 
 
+def list_user_history(limit: int = 100) -> list[dict]:
+    """Todas as gerações do usuário (entre todos os projetos), mais recentes primeiro."""
+    uid = current_user_id()
+    with session_scope() as s:
+        projs = {
+            p.id: p.folder_name
+            for p in s.query(ProjectRow).filter(ProjectRow.user_id == uid).all()
+        }
+        if not projs:
+            return []
+        gens = (
+            s.query(Generation)
+            .filter(Generation.project_id.in_(list(projs.keys())))
+            .order_by(Generation.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        out = []
+        for g in gens:
+            item = g.to_dict(include_output=False)
+            item["project"] = projs.get(g.project_id)
+            item["decisions"] = [d.to_dict() for d in g.decisions]
+            out.append(item)
+        return out
+
+
+def get_user_generation(generation_id: str) -> dict | None:
+    """Uma geração completa (prompt enviado + output + decisões), se pertencer ao usuário."""
+    uid = current_user_id()
+    with session_scope() as s:
+        g = s.get(Generation, generation_id)
+        if g is None:
+            return None
+        proj = s.get(ProjectRow, g.project_id)
+        if proj is None or proj.user_id != uid:
+            return None
+        data = g.to_dict(include_output=True)
+        data["project"] = proj.folder_name
+        data["decisions"] = [d.to_dict() for d in g.decisions]
+        return data
+
+
 def get_generation(folder_name: str, generation_id: str) -> dict | None:
     """Uma geração completa (com prompt_rendered e output) + decisões."""
     uid = current_user_id()

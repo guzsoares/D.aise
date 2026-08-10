@@ -109,3 +109,41 @@ def get_user(user_id: str) -> dict | None:
     with session_scope() as s:
         u = s.get(User, user_id)
         return u.to_dict() if u else None
+
+
+def update_profile(user_id: str, email: str | None = None, name: str | None = None) -> dict:
+    """Atualiza e-mail e/ou nome do usuário. Levanta ValueError em caso inválido."""
+    with session_scope() as s:
+        u = s.get(User, user_id)
+        if u is None:
+            raise ValueError("Usuário não encontrado.")
+        if email is not None:
+            email = email.strip().lower()
+            if not email or "@" not in email:
+                raise ValueError("E-mail inválido.")
+            taken = (
+                s.query(User)
+                .filter(User.email == email, User.id != user_id)
+                .first()
+            )
+            if taken:
+                raise ValueError("E-mail já em uso.")
+            u.email = email
+        if name is not None:
+            u.name = name.strip()
+        s.flush()
+        return u.to_dict()
+
+
+def change_password(user_id: str, current_password: str, new_password: str) -> bool:
+    """Troca a senha após validar a atual. Levanta ValueError se inválido."""
+    if not new_password or len(new_password) < 6:
+        raise ValueError("A nova senha deve ter ao menos 6 caracteres.")
+    with session_scope() as s:
+        u = s.get(User, user_id)
+        if u is None:
+            raise ValueError("Usuário não encontrado.")
+        if not passwords.verify_password(current_password, u.password_hash):
+            raise ValueError("Senha atual incorreta.")
+        u.password_hash = passwords.hash_password(new_password)
+        return True

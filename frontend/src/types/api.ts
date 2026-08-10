@@ -14,6 +14,38 @@ export type ApiAuthResponse = {
   expires_at: string;
 };
 
+export type ApiDecision = {
+  id: string;
+  decision: "approved" | "rejected";
+  apply_target: string | null;
+  commit_hash: string | null;
+  commit_url: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+export type ApiGeneration = {
+  id: string;
+  project?: string;
+  operation: string;
+  provider: string;
+  model: string;
+  temperature: number | null;
+  max_output_tokens: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  duration_ms: number | null;
+  status: string;
+  rating: number | null;
+  created_at: string;
+  decisions: ApiDecision[];
+  inputs?: Record<string, unknown>;
+  // presentes só no detalhe:
+  prompt_rendered?: string;
+  output?: string;
+  previous_readme?: string | null;
+};
+
 export type ApiProject = {
   id: string;
   name: string;
