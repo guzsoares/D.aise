@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  Check,
   CheckCircle2,
   Cloud,
   Eye,
@@ -11,7 +12,7 @@ import {
   Plus,
   Save,
 } from "lucide-react";
-import { Select, type SelectOption } from "@/components/ui/Select";
+import { type SelectOption } from "@/components/ui/Select";
 import { getLlmConfig, getModels, saveLlmConfig } from "@/services/api";
 import type { ApiLlmConfig, ApiModelOption } from "@/types/api";
 
@@ -247,13 +248,26 @@ export default function LLMConfigForm() {
 
       <div className="space-y-6">
         <div>
-          <FieldLabel htmlFor="llm-provider">LLM provider</FieldLabel>
-          <Select
-            id="llm-provider"
-            value={provider}
-            onChange={handleProviderChange}
-            options={PROVIDER_OPTIONS}
-          />
+          <FieldLabel>LLM provider</FieldLabel>
+          <div className="flex gap-2">
+            {PROVIDER_OPTIONS.map((p) => {
+              const active = p.value === provider;
+              return (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => handleProviderChange(p.value)}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                    active
+                      ? "border-brand/50 bg-brand/10 text-brand"
+                      : "border-stroke bg-surface-input text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div>
@@ -333,13 +347,25 @@ export default function LLMConfigForm() {
 
         {modelOptions.length > 0 ? (
           <div>
-            <FieldLabel htmlFor="llm-model">Model</FieldLabel>
-            <Select
-              id="llm-model"
-              value={model}
-              onChange={handleModelChange}
-              options={modelOptions}
-            />
+            <FieldLabel>{`Model (${modelOptions.length} disponíveis)`}</FieldLabel>
+            <div className="max-h-72 overflow-y-auto rounded-lg border border-stroke bg-surface-input">
+              {modelOptions.map((m) => {
+                const active = m.value === model;
+                return (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => handleModelChange(m.value)}
+                    className={`flex w-full items-center justify-between gap-3 border-b border-stroke/60 px-4 py-2.5 text-left text-sm transition last:border-b-0 ${
+                      active ? "bg-brand/10 text-brand" : "text-zinc-300 hover:bg-white/5"
+                    }`}
+                  >
+                    <span className="font-medium">{m.label}</span>
+                    {active ? <Check className="size-4 shrink-0" strokeWidth={2} aria-hidden /> : null}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : null}
 

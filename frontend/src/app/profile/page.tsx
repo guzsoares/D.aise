@@ -252,10 +252,11 @@ function HistorySection() {
   );
 }
 
-type Tab = "user" | "github" | "llm";
+type Tab = "user" | "history" | "github" | "llm";
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "user", label: "Usuário", icon: <UserIcon className="size-4" strokeWidth={1.75} /> },
+  { id: "history", label: "Histórico", icon: <History className="size-4" strokeWidth={1.75} /> },
   { id: "github", label: "GitHub", icon: <GithubIcon className="size-4" /> },
   { id: "llm", label: "LLM Configs", icon: <SlidersHorizontal className="size-4" strokeWidth={1.75} /> },
 ];
@@ -297,10 +298,11 @@ export default function ProfilePage() {
           <>
             <ProfileForm />
             <PasswordForm />
-            <HistorySection />
             <DataPrivacySection />
           </>
         ) : null}
+
+        {tab === "history" ? <HistorySection /> : null}
 
         {tab === "github" ? <GithubTokenForm /> : null}
 
