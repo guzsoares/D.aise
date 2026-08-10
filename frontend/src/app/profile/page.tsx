@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import {
+  Check,
   ChevronDown,
   ChevronRight,
+  Copy,
   History,
   Loader2,
   Lock,
@@ -152,6 +154,219 @@ function PasswordForm() {
   );
 }
 
+// ─── Detalhe técnico de uma geração ──────────────────────────────────────────
+function Meta({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-stroke/60 bg-black/30 px-3 py-2">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+        {label}
+      </div>
+      <div className="mt-0.5 font-mono text-xs text-zinc-200 break-words">
+        {value === null || value === undefined || value === "" ? "—" : value}
+      </div>
+    </div>
+  );
+}
+
+function CodeBlock({
+  label,
+  text,
+  maxHeight = "max-h-80",
+}: {
+  label: string;
+  text: string;
+  maxHeight?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <div className="rounded-lg border border-stroke bg-black/40">
+      <div className="flex items-center justify-between border-b border-stroke px-3 py-2">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
+          {label}
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-400 transition hover:bg-white/5 hover:text-zinc-200"
+        >
+          {copied ? (
+            <Check className="size-3.5 text-brand" strokeWidth={2} />
+          ) : (
+            <Copy className="size-3.5" strokeWidth={1.75} />
+          )}
+          {copied ? "Copiado!" : "Copiar"}
+        </button>
+      </div>
+      <pre
+        className={`${maxHeight} overflow-auto px-3 py-2.5 font-mono text-[11px] leading-relaxed text-zinc-300 whitespace-pre-wrap break-words`}
+      >
+{text || "(vazio)"}
+      </pre>
+    </div>
+  );
+}
+
+function GenerationDetail({ gen }: { gen: ApiGeneration }) {
+  const when = new Date(gen.created_at).toLocaleString("pt-BR");
+  const inputs = gen.inputs ?? {};
+  const inputEntries = Object.entries(inputs);
+
+  return (
+    <div className="space-y-4">
+      {/* Parâmetros da execução */}
+      <div>
+        <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-brand">
+          Parâmetros da execução
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <Meta label="Operação" value={gen.operation} />
+          <Meta label="Provider" value={gen.provider} />
+          <Meta label="Modelo" value={gen.model} />
+          <Meta
+            label="Temperature"
+            value={gen.temperature != null ? gen.temperature.toFixed(2) : null}
+          />
+          <Meta
+            label="Max output tokens"
+            value={gen.max_output_tokens ?? null}
+          />
+          <Meta label="Tokens entrada" value={gen.input_tokens ?? null} />
+          <Meta label="Tokens saída" value={gen.output_tokens ?? null} />
+          <Meta
+            label="Duração"
+            value={gen.duration_ms != null ? `${gen.duration_ms} ms` : null}
+          />
+          <Meta
+            label="Status"
+            value={
+              <span
+                className={
+                  gen.status === "success" ? "text-brand" : "text-rose-300"
+                }
+              >
+                {gen.status}
+              </span>
+            }
+          />
+          <Meta label="Data" value={when} />
+          <Meta label="Prompt ID" value={gen.prompt_id ?? null} />
+          <Meta label="Generation ID" value={gen.id} />
+        </div>
+      </div>
+
+      {/* Erro, se houver */}
+      {gen.error_message ? (
+        <div className="rounded-lg border border-rose-900/60 bg-rose-950/30 px-3 py-2 text-xs text-rose-300">
+          <span className="font-semibold">Erro:</span> {gen.error_message}
+        </div>
+      ) : null}
+
+      {/* Inputs enviados ao gerador */}
+      {inputEntries.length > 0 ? (
+        <div>
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-brand">
+            Inputs do gerador
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+            {inputEntries.map(([k, v]) => (
+              <Meta
+                key={k}
+                label={k}
+                value={
+                  typeof v === "boolean"
+                    ? v
+                      ? "sim"
+                      : "não"
+                    : Array.isArray(v)
+                      ? v.length
+                        ? v.join(", ")
+                        : "—"
+                      : v === null || v === undefined
+                        ? null
+                        : String(v)
+                }
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Prompt enviado à LLM (o pedido pelo pesquisador) */}
+      <CodeBlock
+        label="Prompt enviado à LLM"
+        text={gen.prompt_rendered ?? ""}
+        maxHeight="max-h-96"
+      />
+
+      {/* README proposto */}
+      <CodeBlock label="README proposto (saída da LLM)" text={gen.output ?? ""} />
+
+      {/* README anterior, se houver */}
+      {gen.previous_readme ? (
+        <CodeBlock label="README anterior (antes da geração)" text={gen.previous_readme} />
+      ) : null}
+
+      {/* Avaliação de qualidade, se houver */}
+      {gen.rating != null || gen.quality_note ? (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+          <Meta label="Rating" value={gen.rating != null ? `${gen.rating}/5` : null} />
+          <div className="sm:col-span-3">
+            <Meta label="Nota de qualidade" value={gen.quality_note ?? null} />
+          </div>
+        </div>
+      ) : null}
+
+      {/* Decisões humanas (aprovação / reprovação) */}
+      {gen.decisions.length > 0 ? (
+        <div>
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-brand">
+            Decisões
+          </div>
+          <div className="space-y-2">
+            {gen.decisions.map((d) => (
+              <div
+                key={d.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-stroke/60 bg-black/30 px-3 py-2 font-mono text-[11px] text-zinc-300"
+              >
+                <span
+                  className={`rounded px-1.5 py-0.5 font-semibold ${
+                    d.decision === "approved"
+                      ? "bg-brand/15 text-brand"
+                      : "bg-rose-500/15 text-rose-300"
+                  }`}
+                >
+                  {d.decision === "approved" ? "aprovado" : "reprovado"}
+                </span>
+                {d.apply_target ? <span>alvo: {d.apply_target}</span> : null}
+                {d.commit_hash ? <span>commit: {d.commit_hash.slice(0, 10)}</span> : null}
+                {d.commit_url ? (
+                  <a
+                    href={d.commit_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand underline"
+                  >
+                    link
+                  </a>
+                ) : null}
+                {d.note ? <span className="text-zinc-400">“{d.note}”</span> : null}
+                <span className="text-zinc-500">
+                  {new Date(d.created_at).toLocaleString("pt-BR")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Histórico de gerações ───────────────────────────────────────────────────
 function HistoryRow({ gen }: { gen: ApiGeneration }) {
   const [open, setOpen] = useState(false);
@@ -215,9 +430,7 @@ function HistoryRow({ gen }: { gen: ApiGeneration }) {
           {loading ? (
             <div className="flex items-center gap-2 text-xs text-zinc-500"><Loader2 className="size-3.5 animate-spin" /> carregando…</div>
           ) : detail ? (
-            <pre className="max-h-72 overflow-auto rounded-lg border border-stroke bg-background-app p-3 text-xs leading-relaxed text-zinc-300 whitespace-pre-wrap">
-{detail.output || "(sem conteúdo)"}
-            </pre>
+            <GenerationDetail gen={detail} />
           ) : (
             <p className="text-xs text-zinc-500">Não foi possível carregar o detalhe.</p>
           )}

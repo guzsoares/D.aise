@@ -275,6 +275,22 @@ class ProjectService:
             #  Salva o conteúdo do README no diretório sequencial
             self._save_generated_readme(project, content)
 
+            # README atual do projeto (para o diff no frontend). Espelha a lógica
+            # do update_readme: GitHub via API, local via arquivo em disco.
+            old_readme = ""
+            try:
+                if project.source == "github" and project.github_repo:
+                    from app.src.service.github_service import GithubService
+                    owner, repo_name = project.github_repo.split("/", 1)
+                    github_token = _resolve_github_token(llm_config)
+                    old_readme = GithubService(token=github_token).get_readme_content(
+                        owner, repo_name
+                    )
+                else:
+                    old_readme = project.readme_content or ""
+            except Exception as e:
+                print(f"⚠️ Não foi possível ler o README atual para diff: {e}")
+
             # Histórico da execução
             from app.src.service.history_service import record_generation
             gen_id = record_generation(
@@ -283,6 +299,7 @@ class ProjectService:
                 agent=agent,
                 output=content,
                 prompt_id=prompt_id,
+                previous_readme=old_readme,
                 inputs={
                     "tree": bool(data.get("tree")),
                     "commit_options": data.get("commit_options") or [],
@@ -293,7 +310,11 @@ class ProjectService:
                 },
             )
 
-            return {"content": content, "generation_id": gen_id}, 200
+            return {
+                "content": content,
+                "generation_id": gen_id,
+                "previous_readme": old_readme,
+            }, 200
 
         except Exception as e:
             print("Erro em generate_readme:", e)

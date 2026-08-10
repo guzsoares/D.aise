@@ -28,7 +28,6 @@ import GenerateReadmeModal, {
   type GenerateReadmeFormData,
 } from "@/components/features/GenerateReadmeModal";
 import ReadmeResultSection from "@/components/features/ReadmeResultSection";
-import ReadmeDiffSection from "@/components/features/ReadmeDiffSection";
 import type { FolderNode, TreeNode } from "../tree-types";
 import type { ApiProject } from "@/types/api";
 import {
@@ -391,7 +390,7 @@ function ProjectsDashboardContent({ projectId }: { projectId: string }) {
         commit_options: commitOptions.length > 0 ? commitOptions : undefined,
         llm_config: llmConfig,
       });
-      setOldReadmeText("");
+      setOldReadmeText(res.previous_readme ?? "");
       setReadmeText(res.content ?? "");
       setIsGenerateReadmeModalOpen(false);
     } catch (e) {
@@ -860,15 +859,12 @@ function ProjectsDashboardContent({ projectId }: { projectId: string }) {
         {/* Inline README result — full width below the grid */}
         {readmeText && project ? (
           <div className="mt-6">
-            {oldReadmeText ? (
-              <ReadmeDiffSection
-                oldReadmeText={oldReadmeText}
-                newReadmeText={readmeText}
-                project={project}
-              />
-            ) : (
-              <ReadmeResultSection readmeText={readmeText} project={project} onReadmeCreated={handleRefreshTree} />
-            )}
+            <ReadmeResultSection
+              readmeText={readmeText}
+              oldReadmeText={oldReadmeText}
+              project={project}
+              onReadmeCreated={handleRefreshTree}
+            />
           </div>
         ) : null}
         </>

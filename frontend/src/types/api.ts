@@ -36,7 +36,10 @@ export type ApiGeneration = {
   output_tokens: number | null;
   duration_ms: number | null;
   status: string;
+  error_message?: string | null;
   rating: number | null;
+  quality_note?: string | null;
+  prompt_id?: string | null;
   created_at: string;
   decisions: ApiDecision[];
   inputs?: Record<string, unknown>;
@@ -117,6 +120,9 @@ export type ApiModels = Record<string, ApiModelOption[]>;
 
 export type ApiGenerateReadmeResponse = {
   content: string;
+  generation_id?: number;
+  /** README atual do projeto (vazio se não houver), usado para o diff. */
+  previous_readme?: string;
 };
 
 export type ApiUpdateReadmeResponse = {
