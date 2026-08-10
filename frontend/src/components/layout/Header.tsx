@@ -1,16 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, User as UserIcon } from "lucide-react";
 import { headerNav, isActive } from "./nav-config";
-import GitHubTokenModal from "@/components/features/GitHubTokenModal";
 import { useAuth } from "@/context/AuthContext";
 
 export default function Header() {
   const pathname = usePathname();
-  const [isGithubModalOpen, setIsGithubModalOpen] = useState(false);
   const { user, logout } = useAuth();
 
   return (
@@ -42,22 +39,6 @@ export default function Header() {
             </Link>
           );
         })}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setIsGithubModalOpen((v) => !v)}
-            className={`text-sm font-medium transition-colors ${
-              isGithubModalOpen
-                ? "text-brand"
-                : "text-zinc-400 hover:text-zinc-100"
-            }`}
-          >
-            GitHub Token
-          </button>
-          {isGithubModalOpen ? (
-            <GitHubTokenModal onClose={() => setIsGithubModalOpen(false)} />
-          ) : null}
-        </div>
       </nav>
 
       <div className="flex items-center gap-3 justify-self-end">
