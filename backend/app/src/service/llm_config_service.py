@@ -273,6 +273,32 @@ def save_config(partial: dict) -> dict:
     return get_config_for_api()
 
 
+def clear_credentials() -> int:
+    """Apaga TODAS as credenciais do usuário atual (chaves/tokens), sem deixar rastro.
+
+    Remove as linhas cifradas no banco e as entradas correspondentes no arquivo
+    de segredos locais. Retorna quantas credenciais foram removidas.
+    """
+    uid = current_user_id()
+    with session_scope() as s:
+        rows = s.query(Credential).filter(Credential.user_id == uid).all()
+        local_providers = [r.provider for r in rows if (r.storage_mode or "") == "local"]
+        count = len(rows)
+        for r in rows:
+            s.delete(r)
+
+    if local_providers:
+        local = _load_local()
+        changed = False
+        for prov in local_providers:
+            if prov in local:
+                local.pop(prov, None)
+                changed = True
+        if changed:
+            _save_local(local)
+    return count
+
+
 def resolve_secret(provider: str) -> str:
     """Segredo em texto puro para uso interno (Agent/GitHub). Nunca exposto na API."""
     provider = (provider or "").lower()

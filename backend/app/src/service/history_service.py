@@ -130,6 +130,25 @@ def list_history(folder_name: str, limit: int = 50) -> list[dict]:
         return out
 
 
+def clear_history() -> int:
+    """Apaga todo o histórico de gerações do usuário atual (decisões vão por cascade).
+
+    Retorna quantas gerações foram removidas.
+    """
+    uid = current_user_id()
+    with session_scope() as s:
+        proj_ids = [
+            pid for (pid,) in s.query(ProjectRow.id).filter(ProjectRow.user_id == uid).all()
+        ]
+        if not proj_ids:
+            return 0
+        gens = s.query(Generation).filter(Generation.project_id.in_(proj_ids)).all()
+        count = len(gens)
+        for g in gens:
+            s.delete(g)  # review_decisions caem por ON DELETE CASCADE
+        return count
+
+
 def get_generation(folder_name: str, generation_id: str) -> dict | None:
     """Uma geração completa (com prompt_rendered e output) + decisões."""
     uid = current_user_id()

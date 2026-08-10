@@ -95,6 +95,16 @@ export function authMe(): Promise<{ user: ApiUser }> {
   return req("/auth/me");
 }
 
+// ─── Conta / privacidade ────────────────────────────────────────────────────
+
+export function clearCredentials(): Promise<{ message: string; removed: number }> {
+  return req("/account/credentials", { method: "DELETE" });
+}
+
+export function clearHistory(): Promise<{ message: string; removed: number }> {
+  return req("/account/history", { method: "DELETE" });
+}
+
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
 export function getProjects(): Promise<ApiProject[]> {
