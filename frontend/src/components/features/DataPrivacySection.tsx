@@ -12,7 +12,6 @@ function DangerRow({
   buttonLabel,
   confirm,
   onConfirm,
-  reloadAfter,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -24,7 +23,6 @@ function DangerRow({
     confirmLabel: string;
   };
   onConfirm: () => Promise<{ message: string; removed: number }>;
-  reloadAfter?: boolean;
 }) {
   const ask = useConfirm();
   const [busy, setBusy] = useState(false);
@@ -45,7 +43,6 @@ function DangerRow({
     try {
       const res = await onConfirm();
       setResult(`${res.message} (${res.removed})`);
-      if (reloadAfter) setTimeout(() => window.location.reload(), 800);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao executar.");
     } finally {
@@ -102,7 +99,6 @@ export default function DataPrivacySection() {
             confirmLabel: "Apagar credenciais",
           }}
           onConfirm={clearCredentials}
-          reloadAfter
         />
       </div>
     </div>
