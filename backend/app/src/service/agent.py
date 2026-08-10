@@ -258,15 +258,19 @@ class Agent:
         self.last_temperature = temperature
         self.last_max_tokens = max_tokens
 
-        if llm_provider == "openai":
-            raise RuntimeError("Provedor OpenAI ainda não suportado no backend.")
-
         start = time.perf_counter()
         try:
             if llm_provider == "ollama":
                 result = self._run_ollama(
                     model_name=model_name,
                     ollama_url=ollama_url,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            elif llm_provider == "openai":
+                result = self._run_openai(
+                    model_name=model_name,
+                    api_key=api_key,
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
@@ -315,6 +319,52 @@ class Agent:
         except Exception as e:
             print(f"Erro ao gerar conteúdo: {e}")
             raise RuntimeError("Erro ao gerar conteúdo via LLM") from e
+
+    def _run_openai(self, model_name: str, api_key: str, temperature=None, max_tokens=None):
+        if not api_key:
+            raise RuntimeError("Chave da API da OpenAI não informada.")
+        if not model_name:
+            raise RuntimeError("Modelo não informado para OpenAI.")
+        print(f"Running OpenAI with model: {model_name}")
+        try:
+            from openai import OpenAI
+
+            client = OpenAI(api_key=api_key)
+            kwargs = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": self.prompt.content}],
+            }
+            if temperature is not None:
+                kwargs["temperature"] = temperature
+            if max_tokens is not None:
+                # param atual (substitui max_tokens; funciona em gpt-4o e o-series)
+                kwargs["max_completion_tokens"] = max_tokens
+
+            try:
+                response = client.chat.completions.create(**kwargs)
+            except Exception as e:
+                # Modelos de raciocínio (o-series/gpt-5) rejeitam temperature!=1;
+                # tenta novamente sem o parâmetro.
+                if "temperature" in str(e).lower() and "temperature" in kwargs:
+                    kwargs.pop("temperature", None)
+                    response = client.chat.completions.create(**kwargs)
+                else:
+                    raise
+
+            try:
+                usage = getattr(response, "usage", None)
+                if usage is not None:
+                    self.last_usage = {
+                        "input": getattr(usage, "prompt_tokens", None),
+                        "output": getattr(usage, "completion_tokens", None),
+                    }
+            except Exception:
+                pass
+
+            return response.choices[0].message.content or ""
+        except Exception as e:
+            print(f"Erro ao gerar conteúdo (OpenAI): {e}")
+            raise RuntimeError(f"Erro ao gerar conteúdo via OpenAI: {e}") from e
 
     def _run_ollama(self, model_name: str, ollama_url: str, temperature=None, max_tokens=None):
         if not ollama_url:
