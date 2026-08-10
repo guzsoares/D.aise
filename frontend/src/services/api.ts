@@ -101,10 +101,6 @@ export function clearCredentials(): Promise<{ message: string; removed: number }
   return req("/account/credentials", { method: "DELETE" });
 }
 
-export function clearHistory(): Promise<{ message: string; removed: number }> {
-  return req("/account/history", { method: "DELETE" });
-}
-
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
 export function getProjects(): Promise<ApiProject[]> {

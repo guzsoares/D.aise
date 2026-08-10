@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, KeyRound, History, Loader2 } from "lucide-react";
-import { clearCredentials, clearHistory } from "@/services/api";
+import { AlertTriangle, KeyRound, Loader2 } from "lucide-react";
+import { clearCredentials } from "@/services/api";
 
 type Action = "credentials" | "history";
 
@@ -108,7 +108,7 @@ export default function DataPrivacySection() {
         Ações irreversíveis sobre os seus dados. Não deixam rastro.
       </p>
 
-      <div className="divide-y divide-stroke">
+      <div>
         <DangerRow
           icon={<KeyRound className="size-5" strokeWidth={1.75} />}
           title="Limpar credenciais (chaves e tokens)"
@@ -117,14 +117,6 @@ export default function DataPrivacySection() {
           confirmText="Apagar todas as chaves?"
           onConfirm={clearCredentials}
           reloadAfter
-        />
-        <DangerRow
-          icon={<History className="size-5" strokeWidth={1.75} />}
-          title="Limpar histórico de gerações"
-          description="Remove todo o histórico de gerações e as decisões (aprovado/reprovado) dos seus projetos."
-          buttonLabel="Limpar histórico"
-          confirmText="Apagar todo o histórico?"
-          onConfirm={clearHistory}
         />
       </div>
     </div>
